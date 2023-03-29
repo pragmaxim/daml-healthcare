@@ -1,0 +1,164 @@
+module Model.Main.Patient where
+
+import Model.Main.Policy
+import Model.Main.Payer
+import DA.Date
+import Model.Main.Types
+import Model.Main.Procedure
+
+-- Invitation from the operator that the insurance company can accept
+template PatientInvitation
+  with
+    operator : Party
+    patient : Party
+  where
+    signatory operator
+    observer patient
+
+    choice AcceptPatientInvitation : ContractId Patient
+      with
+        patientName : Text
+        demographics : PatientDemographics
+      controller patient
+      do
+        create Patient with
+          insuranceID = None
+          primaryCareProviderID = None, ..
+
+-- Patient reference data and actions the patient can initiante in the workflow
+template Patient
+  with
+    operator : Party
+    patient : Party
+    patientName : Text
+    demographics : PatientDemographics
+    insuranceID : Optional Text
+    primaryCareProviderID : Optional Text
+  where
+    signatory operator
+    signatory patient
+    observer patient
+
+    nonconsuming choice RequestInsurancePolicy : ContractId RequestPayerForPolicy
+      with
+        payer : Party
+        policyType : PolicyType
+      controller patient  
+      do create RequestPayerForPolicy with ..
+
+    choice SetInsurancePolicy : ContractId Patient
+      with
+        notifyCid : ContractId NotifyPatientOfPayerAcceptance
+      controller patient  
+      do
+        notify <- fetch notifyCid
+        assert (notify.patient == patient)
+        create this with insuranceID = Some notify.insuranceID
+
+    nonconsuming choice RequestPrimaryCareProvider : ContractId PrimaryCareProviderRequest
+      with
+        primaryCareProvider : Party
+      controller patient  
+      do
+        create PrimaryCareProviderRequest with
+          provider = primaryCareProvider, ..
+
+    choice SetPrimaryCareProvider : ContractId Patient
+      with
+        notifyCid : ContractId NotifyPatientOfPCPAcceptance
+      controller patient  
+      do
+        notify <- fetch notifyCid
+        assert (notify.patient == patient)
+        create this with primaryCareProviderID = Some notify.providerID
+
+-- Patient request to create an insurance policy with the insurance company
+template RequestPayerForPolicy
+  with
+    operator : Party
+    payer : Party
+    patient : Party
+    policyType : PolicyType
+    patientName : Text
+    demographics : PatientDemographics
+
+  where
+
+    signatory patient
+    observer payer
+
+    choice AcceptMember : (ContractId InsurancePolicy, ContractId NotifyPatientOfPayerAcceptance)
+      with
+        payerCid : ContractId Payer
+        insuranceID : Text
+        undisclosedProcedureList : ProcedureMap
+      controller payer  
+      do
+        p <- fetch payerCid
+        assert (p.payer == payer)
+        procedureList <- discloseProcedureMap [patient] undisclosedProcedureList
+        policyCid <- if policyType == Bronze then
+          create InsurancePolicy
+            with
+              annualDeductible = 1000.0
+              currentDeductible = 1000.0
+              policyEndDate = date 2040 Dec 1
+              isPolicyInGoodStanding = True, ..
+        else
+          if policyType == Gold then
+          create InsurancePolicy with
+            annualDeductible = 0.0
+            currentDeductible = 0.0
+            policyEndDate = date 2040 Dec 1
+            isPolicyInGoodStanding = True, ..
+        else
+          create InsurancePolicy with
+            policyType = Bronze
+            annualDeductible = 1000.0
+            currentDeductible = 1000.0
+            policyEndDate = date 2040 Dec 1
+            isPolicyInGoodStanding = True, ..
+
+        notifyCid <- create NotifyPatientOfPayerAcceptance with ..
+        return (policyCid, notifyCid)
+
+-- Notification for the patient that the insurance company accepted their request for policy
+template NotifyPatientOfPayerAcceptance
+  with
+    operator : Party
+    payer : Party
+    patient : Party
+    insuranceID : Text
+    policyType : PolicyType
+
+  where
+    signatory payer
+    signatory patient
+
+-- Patient's request for a primary care provider
+template PrimaryCareProviderRequest
+  with
+    operator : Party
+    patient : Party
+    provider : Party
+    demographics : PatientDemographics
+  where
+    signatory patient
+    observer provider
+
+    choice AcceptPatient : ContractId NotifyPatientOfPCPAcceptance
+      with
+        providerID : Text
+      controller provider  
+      do create NotifyPatientOfPCPAcceptance with ..
+
+-- Notification for the patient that the primary care provider accepted their request
+template NotifyPatientOfPCPAcceptance
+  with
+   operator : Party
+   patient : Party
+   provider : Party
+   demographics : PatientDemographics
+   providerID : Text
+  where
+    signatory patient, provider

@@ -1,0 +1,179 @@
+module Model.Demo.Setup where
+
+import Model.Demo.ReferenceData qualified as Ref
+import Model.Main.Payer
+import Model.Main.Patient
+import Model.Main.Procedure
+import Model.Main.Policy
+import Model.Main.Onboard
+import Model.Main.Provider
+import DA.Map
+import DA.Optional
+import DA.List
+import Daml.Script
+import qualified DA.Text as T
+
+
+data LedgerParties = LedgerParties
+  with
+    provider1 : Party
+    provider2 : Party
+    patient1 : Party
+    operator : Party
+    payer1 : Party
+
+setupWith : LedgerParties -> Script ()
+setupWith parties = do
+  let provider1 = parties.provider1
+      provider2 = parties.provider2
+      patient1  = parties.patient1
+      operator  = parties.operator
+      payer1    = parties.payer1
+
+  entityMaster <- operator `submit`
+    createCmd OnboardEntityMaster with
+    operator
+
+  payerInvitation <- operator `submit`
+    exerciseCmd entityMaster InvitePayer with
+    payer = payer1
+  payerRole <- payer1 `submit`
+    exerciseCmd payerInvitation AcceptPayerInvitation with
+    payerName = Ref.payer1_payerName
+    demographics = Ref.payer1Demographics
+  _ <- debug ("Creating Payer named " <> Ref.payer1_payerName)  
+
+  provider1Invitation <-
+    operator `submit` exerciseCmd entityMaster InviteProvider with provider = provider1
+  provider1Role <-
+    provider1 `submit`
+    exerciseCmd provider1Invitation AcceptProviderInvitation with
+      providerName = Ref.provider1_name
+      demographics = Ref.provider1Demographics
+  _ <- debug ("Creating Provider1 named " <> Ref.provider1_name)  
+
+  provider2Invitation <-
+    operator `submit` exerciseCmd entityMaster InviteProvider with provider = provider2
+  provider2Role <-
+    provider2 `submit`
+    exerciseCmd provider2Invitation AcceptProviderInvitation with
+      providerName = Ref.provider2_name
+      demographics = Ref.provider2Demographics
+  _ <- debug ("Creating Provider1 named " <> Ref.provider2_name)  
+
+  patient1Invitation <-
+    operator `submit` exerciseCmd entityMaster InvitePatient with patient = patient1
+  patient1Role <-
+    patient1 `submit`
+    exerciseCmd patient1Invitation AcceptPatientInvitation with
+      patientName = Ref.patient1_Name
+      demographics = Ref.patient1Demographics
+  _ <- debug ("Creating Patient1 named " <> Ref.patient1_Name)      
+
+  -- with the same payer
+  providerRequest <-
+    provider1 `submit`
+      exerciseCmd provider1Role RequestNetworkContract with payer = payer1
+  payer1 `submit`
+    exerciseCmd providerRequest AcceptNetworkContractRequest with
+      payerCid = payerRole
+      feeSchedule = Ref.feeSchedule
+
+  providerRequest <-
+    provider2 `submit`
+      exerciseCmd provider2Role RequestNetworkContract with payer = payer1
+  payer1 `submit`
+    exerciseCmd providerRequest AcceptNetworkContractRequest with
+      payerCid = payerRole
+      feeSchedule = Ref.feeSchedule
+
+  policyReq <-
+    patient1 `submit`
+      exerciseCmd patient1Role RequestInsurancePolicy with
+        payer = payer1
+        policyType = Ref.patient1_PolicyType
+  procedures <- do
+    let p = head Ref.procedureCodeList
+    forA Ref.procedureCodeList $ \procedureCode ->
+      payer1 `submit`
+        createCmd Procedure with
+          copay = 15.0
+          maxProcedures = 20
+          scheduledProcedures = 0
+          receivedProcedures = 0
+          observers = [payer1]
+          owner = payer1
+          procedureCode = p
+  (insurancePolicy, notifyPatientOfPayerAcceptance) <-
+    payer1 `submit`
+      let procedureMap = fromList $ zip Ref.procedureCodeList procedures in
+      exerciseCmd policyReq AcceptMember with
+        payerCid = payerRole
+        insuranceID = Ref.patient1_InsuranceId
+        undisclosedProcedureList = procedureMap
+
+  patientRoleWithPolicy <-
+    patient1 `submit`
+      exerciseCmd patient1Role SetInsurancePolicy with notifyCid = notifyPatientOfPayerAcceptance
+  pcpReq <-
+    patient1 `submit`
+      exerciseCmd patientRoleWithPolicy RequestPrimaryCareProvider with primaryCareProvider = provider1
+  pcpNotifyCid <-
+    provider1 `submit`
+      exerciseCmd pcpReq AcceptPatient with providerID = Ref.provider1_HIN
+
+  patient1 `submit`
+    exerciseCmd patientRoleWithPolicy SetPrimaryCareProvider with
+      notifyCid = pcpNotifyCid
+
+  patient1 `submit`
+    exerciseCmd insurancePolicy DisclosePolicy with receivers = [provider1]
+  patient1 `submit`
+    exerciseCmd insurancePolicy DisclosePolicy with receivers = [provider2]
+
+  patient1 `submit`
+    createCmd DisclosureRule with
+      operator = operator
+      owner = patient1
+      receivers = [provider1, provider2]
+  debug "Ledger initialized."
+
+
+setup : Script ()
+setup = do
+  provider1  <- createTestUser $ "PrimaryCareProvider"
+  provider2  <- createTestUser $ "Radiologist"
+  patient1   <- createTestUser $ "Patient1"
+  operator   <- createTestUser $ "Operator"
+  payer1     <- createTestUser $ "InsuranceCompany"
+  setupWith LedgerParties {provider1, provider2, patient1, operator, payer1}
+
+-- | Create a test user.
+createTestUser : Text -> Script Party
+createTestUser alias = do
+  u <- getOrCreateUser alias
+  let p = getPrimaryParty u
+  pure p
+
+-- | Get a user by their id. If the user doesn't exist, it is created.
+getOrCreateUser : Text -> Script User
+getOrCreateUser alias = do
+  userId <- validateUserId $ toUserId alias
+  try
+    getUser userId
+  catch
+    UserNotFound _ -> do
+      p <- allocateParty alias
+      let u = User userId (Some p)
+      let rights  = [CanActAs p]
+      createUser u rights
+      _ <- debug ("Creating user " <> userIdToText u.userId <> " for party " <> alias)
+      pure u
+
+-- | Convert a text to a valid user id.
+toUserId : Text -> Text
+toUserId = T.asciiToLower
+
+-- | Try to get the primary party of a user and fail if the user has no associated primary party.
+getPrimaryParty : User -> Party
+getPrimaryParty u = fromSomeNote ("User " <> userIdToText u.userId <> " is missing a primary party.") u.primaryParty

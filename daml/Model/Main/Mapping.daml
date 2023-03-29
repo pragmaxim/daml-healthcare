@@ -1,0 +1,21 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+
+module Model.Main.Mapping where
+
+import Model.Main.Types
+
+-- Checks if the diagnosisCode - procedureCode pair is valid or not
+diagnosisToProcedureMapping : DiagnosisCode -> ProcedureCode -> Bool
+diagnosisToProcedureMapping diagnosisCode procedureCode
+  =
+  -- PCP visit
+  if procedureCode == Preventative_Care || procedureCode == Physicals ||
+    procedureCode == Sick_Visits &&
+    diagnosisCode == Pain_in_right_arm_M79_601 || diagnosisCode == Pain_in_left_arm_M79_602 || diagnosisCode == Pain_in_arm_unspecified_M79_603
+    then True
+
+  else False

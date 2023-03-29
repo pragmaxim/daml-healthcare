@@ -1,0 +1,69 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+
+module Model.Main.Treatment where
+
+import Model.Main.Policy
+import Model.Main.Types
+import Model.Main.CostCalculation qualified as CC
+import Model.Main.Claim
+
+-- Payment information created after a treatment finished
+data TreatmentOutput =
+  TreatmentOutput with
+    claimReq : ContractId ClaimRequest
+    patientReq : ContractId PatientPaymentRequest
+
+-- A Treatment contract created when the provider checks in the patient
+template Treatment
+  with
+    operator : Party
+    provider : Party
+    patient : Party
+    policy : ContractId DisclosedPolicy
+    encounterDetails : EncounterDetails
+  where
+    signatory provider
+    observer patient
+
+    choice CompleteTreatment : TreatmentOutput with 
+      controller provider
+      do
+        policyContract <- fetch policy
+        let payer = policyContract.payer
+        case encounterDetails.allowedAmount of
+          Some allowedAmount ->
+            case encounterDetails.patientResponsibility of
+              Some patientResponsibility ->
+                let
+                  payerAmt = (CC.calculatePayerPayment allowedAmount patientResponsibility)
+                in
+                do
+                  claimReq <- create ClaimRequest with
+                    claimId = encounterDetails.encounterId
+                    amount = payerAmt, ..
+                  patientReq <- create PatientPaymentRequest with
+                    paymentId = encounterDetails.encounterId
+                    amount = patientResponsibility, ..
+                  return TreatmentOutput with claimReq; patientReq
+              None ->
+                do
+                  claimReq <- create ClaimRequest with
+                    claimId = encounterDetails.encounterId
+                    amount = 0.0, ..
+                  patientReq <- create PatientPaymentRequest with
+                    paymentId = encounterDetails.encounterId
+                    amount = 0.0, ..
+                  return TreatmentOutput with claimReq; patientReq
+          None ->
+            do
+              claimReq <- create ClaimRequest with
+                claimId = encounterDetails.encounterId
+                amount = 0.0, ..
+              patientReq <- create PatientPaymentRequest with
+                paymentId = encounterDetails.encounterId
+                amount = 0.0, ..
+              return TreatmentOutput with claimReq; patientReq

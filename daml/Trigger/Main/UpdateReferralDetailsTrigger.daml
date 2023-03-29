@@ -1,0 +1,111 @@
+module Trigger.Main.UpdateReferralDetailsTrigger where
+
+import Model.Test.ReferenceData
+import Model.Test.Patient
+import Model.Test.Onboard (allocateParties, Parties(..))
+import Daml.Trigger
+import DA.Foldable hiding (length)
+import DA.Optional
+import Daml.Trigger.Assert
+import DA.Assert
+import Model.Main.Provider
+import Model.Main.Referral
+import DA.Action
+import Model.Main.RuleTypes
+import Trigger.Test.TriggerTestUtils
+import Daml.Script (Script, script)
+import qualified Daml.Script as Script
+
+updateReferralDetailsTrigger : Trigger ()
+updateReferralDetailsTrigger = Trigger
+  { initialize = pure ()
+  , updateState = \_ -> pure ()
+  , rule = updateReferralDetailsRule
+  , registeredTemplates = RegisteredTemplates [
+      registeredTemplate @Referral,
+      registeredTemplate @ReferralDetails
+    ]
+  , heartbeat = None
+  }
+
+updateReferralDetailsRule : Party -> TriggerA () ()
+updateReferralDetailsRule party = do
+  referralList <- query @Referral
+  referralDetailsList <- query @ReferralDetails
+  forA_ referralDetailsList $ \(referralDetailsCid, referralDetails) ->
+    when (referralDetails.renderingProvider == party &&
+          isNone referralDetails.referralDetails.referral) $
+      addCommandIfEncounterIdsMatch referralList referralDetailsCid referralDetails
+ where
+  addCommandIfEncounterIdsMatch referralList referralDetailsCid referralDetails =
+    forA_ referralList $ \(referralCid, referral) ->
+      when (referralDetails.referralDetails.encounterDetails.encounterId
+              == referral.encounterDetails.encounterId) $
+        dedupExercise referralDetailsCid $ UpdateReferralDetails with
+          referralCid = referralCid
+
+-- Tests ---------------------------
+
+testReferralDetailsGetUpdated: Script ()
+testReferralDetailsGetUpdated = script do
+  parties@Parties{..} <- allocateParties
+  (referralCid, referralDetails) <- referralTest parties
+
+  let activeContracts =
+        toACS referralDetails <>
+        toACS referralCid
+  commands <-
+    testTrigger updateReferralDetailsTrigger provider2 activeContracts
+
+  length commands === 1
+  assertExerciseCmd commands $ \(cid, choiceArg) -> do
+    assertEq cid referralDetails
+    assertEq choiceArg $ UpdateReferralDetails with
+        referralCid = referralCid
+
+testNoUpdateIfNoReferral: Script ()
+testNoUpdateIfNoReferral = script do
+  parties@Parties{..} <- allocateParties
+  (referralCid, _referralDetails) <- referralTest parties
+
+  let activeContracts =
+        toACS referralCid
+  commands <-
+    testTrigger updateReferralDetailsTrigger provider2 activeContracts
+
+  length commands === 0
+
+-- Utils
+
+referralTest' = referralTest =<< allocateParties
+
+referralTest parties@Parties{..} = script do
+  patientScenario <- onboardPatient parties
+
+  let onboard = patientScenario.onboardResult
+      provider1Role = onboard.provider1Role
+      provider2NetworkContract = onboard.provider2NetworkContract
+      policyCid = patientScenario.disclosedPolicyCid
+      ruleParams =
+        RuleParameters with
+          policy = policyCid
+          encounterDetails = patient1Encounter
+          networkContract = provider2NetworkContract
+          referral = None
+
+
+  referralReq <- provider1 `submit`
+    Script.exerciseCmd provider1Role CreateReferral with
+      receiver = provider2
+      policy = ruleParams.policy
+      encounterId = ruleParams.encounterDetails.encounterId
+      procedureCode = ruleParams.encounterDetails.procedureCode
+      diagnosisCode = ruleParams.encounterDetails.diagnosisCode
+      siteServiceCode = ruleParams.encounterDetails.siteServiceCode
+      appointmentPriority = ruleParams.encounterDetails.appointmentPriority
+
+  Right refOutput <- provider2 `submit`
+    Script.exerciseCmd referralReq EvaluateReferral with
+      networkContractCid = provider2NetworkContract
+
+  pure refOutput

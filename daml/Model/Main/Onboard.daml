@@ -1,0 +1,29 @@
+module Model.Main.Onboard where
+
+import Model.Main.Payer
+import Model.Main.Provider
+import Model.Main.Patient
+
+-- The very first contract in the workflow created by the operator
+-- Other roles can be created off of this "master" contract
+template OnboardEntityMaster
+  with
+    operator : Party
+  where
+    signatory operator
+    
+    nonconsuming choice InvitePayer : ContractId PayerInvitation with
+        payer : Party
+      controller operator
+      do create PayerInvitation with ..
+
+
+    nonconsuming choice InviteProvider : ContractId ProviderInvitation with 
+        provider : Party
+      controller operator
+      do create ProviderInvitation with ..
+
+    nonconsuming choice InvitePatient : ContractId PatientInvitation with
+        patient : Party
+      controller operator
+      do create PatientInvitation with ..

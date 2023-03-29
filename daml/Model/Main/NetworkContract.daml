@@ -1,0 +1,35 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+
+module Model.Main.NetworkContract where
+
+import Model.Main.Types
+
+-- Contract between an insurance company (payer) and a heathcare provider
+template ProviderNetworkContract
+  with
+    operator : Party
+    payer : Party
+    payerName : Text
+    provider : Party
+    providerName : Text
+    demographics : ProviderDemographics
+    feeSchedule : FeeSchedule
+  where
+    signatory payer
+    signatory provider
+
+-- Represents the case when the insurance company rejects the providers request to create a network contract
+template PayerRejectsNetworkContract
+  with
+    operator : Party
+    payer : Party
+    provider : Party
+    reason : Text
+
+  where
+    signatory payer
+    signatory provider

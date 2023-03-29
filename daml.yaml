@@ -1,0 +1,18 @@
+sdk-version: 2.6.0-snapshot.20221218.11169.0.9d007b31
+name: daml-healthcare
+version: 0.1.0
+source: daml
+# trigger-dependencies-begin
+dependencies:
+- daml-prim
+- daml-stdlib
+- daml-script
+- daml-trigger
+# trigger-dependencies-end
+start-navigator: true
+codegen:
+  js:
+    output-directory: ui/node_modules/@daml.js
+    npm-scope: daml.js
+# Remove this line when running against a ledger without user management.
+init-script: Model.Demo.Setup:setup

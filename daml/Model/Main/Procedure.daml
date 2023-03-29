@@ -1,0 +1,100 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+
+module Model.Main.Procedure where
+
+import DA.List
+import DA.Map
+import Model.Main.Types
+import Daml.Script
+
+type ProcedureMap = Map ProcedureCode (ContractId Procedure)
+
+-- Batch of fields related to a PolicyType
+data ProcedureFields =
+  ProcedureFields with
+    copay : Decimal
+    maxProcedures : Int
+    scheduledProcedures : Int
+    receivedProcedures : Int
+      deriving Eq
+
+-- Relationship between a patient and a procedure type
+template Procedure
+  with
+    owner : Party
+    procedureCode : ProcedureCode
+    copay : Decimal
+    maxProcedures : Int
+    scheduledProcedures : Int
+    receivedProcedures : Int
+    observers : [Party]
+  where
+
+    ensure receivedProcedures + scheduledProcedures <= maxProcedures
+
+    signatory owner
+
+    observer observers
+
+    choice Lock : ContractId Procedure with 
+      controller owner
+      do create this with scheduledProcedures = scheduledProcedures + 1
+
+    choice Unlock : ContractId Procedure with 
+      controller owner
+      do create this with scheduledProcedures = scheduledProcedures - 1
+
+    choice UnlockAndIncrement : ContractId Procedure with
+      controller owner
+      do
+        create this with
+          receivedProcedures = receivedProcedures + 1
+          scheduledProcedures = scheduledProcedures - 1
+
+    nonconsuming choice DiscloseProcedure : ContractId Procedure 
+      with newObservers : [Party]
+      controller (head observers)
+      do create this with observers = newObservers ++ observers
+
+ -- Populate procedure list
+createProcedure : Party -> PolicyType -> ProcedureCode -> Commands (ContractId Procedure)
+createProcedure owner policyType procedureCode =
+  let
+    result =
+      case policyType of
+        Gold -> ProcedureFields with copay = 15.0; maxProcedures = 20; scheduledProcedures = 0; receivedProcedures = 0
+        Bronze -> ProcedureFields with copay = 40.0; maxProcedures = 10; scheduledProcedures = 0; receivedProcedures = 0
+  in
+    do
+      createCmd Procedure
+        with
+          copay = result.copay
+          maxProcedures = result.maxProcedures
+          scheduledProcedures = result.scheduledProcedures
+          receivedProcedures = result.receivedProcedures
+          observers = [owner], ..
+
+createProcedureList : Party -> PolicyType -> [ProcedureCode] -> Commands ([(ContractId Procedure)])
+createProcedureList owner policyType procedureList =
+  let work = createProcedure owner policyType
+  in
+    mapA work procedureList
+
+discloseProcedure : [Party] -> ContractId Procedure -> Update (ContractId Procedure)
+discloseProcedure newObservers procedureCid =
+  do
+    exercise procedureCid DiscloseProcedure with newObservers
+
+discloseProcedureMap : [Party]-> ProcedureMap -> Update ProcedureMap
+discloseProcedureMap newObservers procedureMap =
+  let unzipResult = unzip $ toList procedureMap
+  in
+  let procedureList = snd unzipResult
+  in
+  do
+    disclosedProcedureList <- mapA (discloseProcedure newObservers) procedureList
+    return (fromList $ zip (fst unzipResult) disclosedProcedureList)

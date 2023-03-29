@@ -1,0 +1,111 @@
+module Model.Main.Claim where
+
+import Model.Main.Types
+import Model.Main.Policy
+
+-- A payment claim between the healthcare provider and the insurance company (payer)
+template Claim
+  with
+    operator : Party
+    provider : Party
+    payer : Party
+    encounterDetails : EncounterDetails
+    claimId : Text
+    amount : Decimal
+  where
+    signatory provider
+    observer payer
+
+    choice PayClaim : (ContractId PaymentReceipt, ContractId InsurancePolicy) with
+      controller payer
+      do
+      (policyCid, _) <- fetchByKey @InsurancePolicy (operator, payer, encounterDetails.patient)
+      let
+        procedureCode = encounterDetails.procedureCode
+        maybePatientResp = encounterDetails.patientResponsibility
+      updatedPolicy <- case maybePatientResp of
+        Some patientResponsibility ->
+          do
+            exercise policyCid UpdatePolicyOnTreatmentCompletion with
+              procedureCode; patientResponsibility
+        None -> do
+          exercise policyCid UpdatePolicyOnTreatmentCompletion with
+            procedureCode; patientResponsibility = 0.0
+      receipt <- create PaymentReceipt with
+        recipient = provider
+        sender = payer
+        paymentId = claimId, ..
+      return (receipt, updatedPolicy)
+
+-- A payment obligation between the patient and the healthcare provider
+template PatientObligation
+  with
+    operator : Party
+    provider : Party
+    patient : Party
+    encounterDetails : EncounterDetails
+    paymentId : Text
+    amount : Decimal
+  where
+    signatory provider
+    observer patient
+
+    choice PayPatientObligation : ContractId PaymentReceipt with
+      controller patient
+      do
+      create PaymentReceipt with
+        recipient = provider
+        sender = patient, ..
+
+-- The result of the patient paying an obligation
+template PaymentReceipt
+  with
+    operator : Party
+    recipient : Party
+    sender : Party
+    paymentId : Text
+    amount : Decimal
+  where
+    signatory sender
+
+    observer recipient
+
+-- A payment request which the insurance company (payer) can accept
+template ClaimRequest
+  with
+    operator : Party
+    provider : Party
+    payer : Party
+    encounterDetails : EncounterDetails
+    claimId : Text
+    amount : Decimal
+  where
+
+    ensure amount > 0.0
+
+    signatory provider
+    observer payer
+
+    choice AcceptClaimRequest : ContractId Claim with 
+      controller payer
+      do create Claim with ..
+
+-- A payment request which the patient can accept
+template PatientPaymentRequest
+  with
+    operator : Party
+    provider : Party
+    patient : Party
+    encounterDetails : EncounterDetails
+    paymentId : Text
+    amount : Decimal
+  where
+
+    ensure amount > 0.0
+
+    signatory provider
+    observer patient
+
+    choice AcceptPatientObligation : ContractId PatientObligation with
+      controller patient
+      do create PatientObligation with ..

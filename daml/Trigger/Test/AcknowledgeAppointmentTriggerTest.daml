@@ -1,0 +1,68 @@
+module Trigger.Test.AcknowledgeAppointmentTriggerTest where
+
+import Model.Main.Provider
+import Model.Test.Referral
+import Model.Test.ReferenceData
+import DA.Optional
+import DA.Either
+import Trigger.Main.AcknowledgeAppointmentTrigger
+import Daml.Trigger.Assert (assertExerciseCmd, toACS)
+import DA.Assert ((===))
+import Daml.Script
+
+import Trigger.Test.TriggerTestUtils
+import Model.Test.Onboard
+
+testAppointmentAcknowledgedAndLocked: Script ()
+testAppointmentAcknowledgedAndLocked = script do
+  parties@Parties{..} <- allocateParties
+  (updatedPolicy, notifyPatient) <- appointmentTest parties
+
+  let activeContracts =
+        toACS updatedPolicy <>
+        toACS notifyPatient
+
+  commands <- testTrigger acknowledgeAppointmentTrigger payer1 activeContracts
+
+  1 === length commands
+  let expectedChoice = AcknowledgeAndLock with policyCid = updatedPolicy
+  assertExerciseCmd commands $ \(contract, actualChoice) -> do
+    notifyPatient === contract
+    expectedChoice === actualChoice
+
+testNoAcknowledgedAndLockWhenNoPolicy: Script ()
+testNoAcknowledgedAndLockWhenNoPolicy = script do
+  parties <- allocateParties
+  (_, notifyPatient) <- appointmentTest parties
+
+  let activeContracts = toACS notifyPatient
+
+  commands <- testTrigger acknowledgeAppointmentTrigger parties.payer1 activeContracts
+
+  assertMsg "Expected no commands." $ null commands
+
+testNoNotification: Script ()
+testNoNotification = script do
+  payer <- allocateParty "Insurance Company"
+
+  let activeContracts = mempty
+
+  commands <- testTrigger acknowledgeAppointmentTrigger payer activeContracts
+
+  assertMsg "Expected no commands." $ null commands
+
+appointmentTest parties@Parties{..} = script do
+  referralScenario <- referralTest parties
+
+  let provider2Role = referralScenario.provider2Role
+      appointmentDetails = referralScenario.ruleParameters
+      referralDetails = referralScenario.referralDetails
+      originalPolicy = referralScenario.originalPolicy
+      disclosureList = [provider1, provider2]
+
+  scheduleResult <- provider2 `submit` do
+    exerciseCmd referralDetails ScheduleAppointment with
+      appointmentTime = patient1_appointmentTime
+  let appointmentCid = fromSome $ eitherToOptional $ scheduleResult
+
+  pure (originalPolicy, snd appointmentCid)

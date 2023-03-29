@@ -1,0 +1,154 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+
+module Model.Main.Rules where
+
+import DA.Date
+import DA.Map qualified as M
+import Model.Main.Types
+import Model.Main.RuleTypes
+import Model.Main.Mapping
+
+-- Run a check function and return None in case of success or the error message
+withText : RuleFunc -> Text -> (Party -> RuleParameters -> Update (Optional Text))
+withText f t p rp = do
+  b <- f p rp
+  if b then return None else return (Some t)
+
+-- Return the first nonempty optional value, otherwise return None
+getFirst : [Update (Optional Text)] -> Update (Optional Text)
+getFirst = fmap g . sequence where
+  g : [Optional Text] -> Optional Text
+  g = foldl h None
+  h : Optional Text -> Optional Text -> Optional Text
+  h (Some e) _ = Some e
+  h None e = e
+
+-- Evaluate a list of functions on two parameters and return the list of results
+listF : a -> b -> [(a -> b -> c)] -> [c]
+listF a b = map (\f -> f a b)
+
+-- Evaluate a list of functions and return the first message or None otherwise
+validator : a -> b -> [a -> b -> Update (Optional Text)] -> Update (Optional Text)
+validator p rp fs =  getFirst $ listF p rp fs
+
+runEligibilityRules : Party -> RuleParameters -> Update (Optional Text)
+runEligibilityRules p rp = validator p rp [ goodStanding,
+                                            policyDate,
+                                            procedureCount,
+                                            providerNetwork,
+                                            procedureAllowed]
+
+runPreauthorizationRules : Party -> RuleParameters -> Update (Optional Text)
+runPreauthorizationRules p rp = validator p rp [ referralStatus ]
+
+runAdjudicationRules : Party -> RuleParameters -> Update (Optional Text)
+runAdjudicationRules p rp = validator p rp [ goodStanding,
+                                             policyDate,
+                                             procedureCount,
+                                             providerNetwork,
+                                             procedureAllowed,
+                                             referralStatus ]
+
+-- A list of functions to run the checks
+goodStanding = withText checkPolicyActive "Policy is not in good standing"
+policyDate = withText checkPolicyDate "Policy end date is in the past"
+procedureCount = withText checkProcedureCount "Maximum number of procedures reached"
+providerNetwork = withText checkProviderNetwork "Provider out of network"
+procedureAllowed = withText checkProcedureAllowed "Procedure not allowed"
+referralStatus = withText checkReferral "No referral for procedure"
+
+-- Template that can be used to run different batch of checks
+template RulesCheck
+  with
+    requestingParty : Party
+    ruleParams : RuleParameters
+  where
+    signatory requestingParty
+ 
+    nonconsuming choice CheckEligibility : Optional Text with
+      controller requestingParty
+      do runEligibilityRules requestingParty ruleParams
+
+    nonconsuming choice CheckPreAuthorization : Optional Text with
+      controller requestingParty
+      do runPreauthorizationRules requestingParty ruleParams
+
+    nonconsuming choice CheckAdjudication : Optional Text with
+      controller requestingParty
+      do runAdjudicationRules requestingParty ruleParams
+
+checkReferral : Party -> RuleParameters -> Update Bool
+checkReferral requestingParty ruleParams =
+  do
+    let maybeReferral = ruleParams.referral
+    case maybeReferral of
+      Some refCid ->
+        do
+          r <- fetch refCid
+          return (r.referringProvider == requestingParty || r.renderingProvider == requestingParty)
+      None ->
+        return False
+
+checkProviderNetwork : Party -> RuleParameters -> Update Bool
+checkProviderNetwork requestingParty ruleParams =
+  do
+    n <- fetch ruleParams.networkContract
+    p <- fetch ruleParams.policy
+    return (n.payer == p.payer)
+
+checkPolicyDate : Party -> RuleParameters -> Update Bool
+checkPolicyDate requestingParty ruleParams =
+  do
+    now <- getTime
+    let today = toDateUTC now
+    p <- fetch ruleParams.policy
+    return (p.policyEndDate >= today)
+
+checkPolicyActive : Party -> RuleParameters -> Update Bool
+checkPolicyActive requestingParty ruleParams =
+  do
+    p <- fetch ruleParams.policy
+    return p.isPolicyInGoodStanding
+
+checkProcedureCount : Party -> RuleParameters -> Update Bool
+checkProcedureCount requestingParty ruleParams =
+  do
+    p <- fetch ruleParams.policy
+    let maybeProcedureCid = M.lookup ruleParams.encounterDetails.procedureCode p.procedureList
+    case maybeProcedureCid of
+      Some procedureCid ->
+        do
+          procedure <- fetch procedureCid
+          return (procedure.scheduledProcedures + procedure.receivedProcedures <= procedure.maxProcedures)
+      None -> return False
+
+checkValidProcedureForDiagnosis : Party -> RuleParameters -> Update Bool
+checkValidProcedureForDiagnosis requestingParty ruleParams =
+  return (diagnosisToProcedureMapping ruleParams.encounterDetails.diagnosisCode ruleParams.encounterDetails.procedureCode)
+
+checkReferralToSpecialist : Party -> RuleParameters -> Update Bool
+checkReferralToSpecialist requestingParty ruleParams =
+  do
+  n <- fetch ruleParams.networkContract
+  let maybeReferral = ruleParams.referral
+  case maybeReferral of
+    Some refCid ->
+      do
+        r <- fetch refCid
+        assert (r.renderingProvider == n.provider)
+        return (n.demographics.providerType == Specialist)
+    None ->
+      return False
+
+checkProcedureAllowed : Party -> RuleParameters -> Update Bool
+checkProcedureAllowed requestingParty ruleParams =
+  do
+    p <- fetch ruleParams.policy
+    let maybeProcedureCid = M.lookup ruleParams.encounterDetails.procedureCode p.procedureList
+    case maybeProcedureCid of
+      Some _ -> return True
+      None -> return False

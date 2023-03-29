@@ -1,0 +1,45 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+
+module Model.Test.Treatment where
+
+import DA.Either
+import DA.Optional
+import Model.Main.Appointment
+import Model.Test.Appointment
+import Model.Test.Onboard
+import Model.Main.Treatment
+import Model.Main.Provider
+import Model.Main.Policy
+import Daml.Script
+
+data TreatmentScenarioOutput =
+  TreatmentScenarioOutput with
+    provider2Role : ContractId Provider
+    treatmentCid : ContractId Treatment
+    paymentReq : TreatmentOutput
+    originalPolicy : ContractId InsurancePolicy
+
+-- standalone version to view it in DAML Studio
+treatmentTest' = treatmentTest =<< allocateParties
+
+treatmentTest parties@Parties{..} = script do
+    apptScenario <- appointmentTest parties
+
+    setTime apptScenario.appointmentTime
+
+    let
+      provider2Role = apptScenario.provider2Role
+      appointmentCid = apptScenario.appointmentCid
+      originalPolicy = apptScenario.originalPolicy
+
+    checkInResult <- provider2 `submit` do
+      exerciseCmd (fst appointmentCid) CheckInPatient
+    let treatmentCid = fromSome $ eitherToOptional $ checkInResult
+    paymentReq <- provider2 `submit`
+      exerciseCmd treatmentCid CompleteTreatment
+
+    return TreatmentScenarioOutput with ..

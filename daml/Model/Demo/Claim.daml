@@ -1,0 +1,112 @@
+module Model.Demo.Claim where
+
+import Model.Main.Treatment
+import Model.Main.Claim
+import Model.Main.Policy
+import Model.Demo.Treatment
+import Model.Demo.ReferenceData
+
+import Daml.Script
+
+payerAccept : Party -> TreatmentOutput -> Script (ContractId Claim)
+payerAccept payer paymentReq =
+  payer `submit` exerciseCmd paymentReq.claimReq AcceptClaimRequest
+
+payerPay : Party -> ContractId Claim -> ContractId InsurancePolicy -> Script (ContractId PaymentReceipt, ContractId InsurancePolicy)
+payerPay payer claim policy = do
+  payer `submit` do
+    exerciseCmd claim PayClaim
+
+patientAccept : Party -> TreatmentOutput -> Script (ContractId PatientObligation)
+patientAccept patient paymentReq =
+  patient `submit` exerciseCmd paymentReq.patientReq AcceptPatientObligation
+
+patientPay : Party -> ContractId PatientObligation -> Script (ContractId PaymentReceipt)
+patientPay patient obligation =
+  patient `submit` exerciseCmd obligation PayPatientObligation
+
+claimTest = script
+  do
+    parties@Parties{..} <- allocateParties
+    treatmentScenario <- treatmentTest parties
+    let
+      paymentReq11 = treatmentScenario.paymentReq11
+      paymentReq12 = treatmentScenario.paymentReq12
+      paymentReq21 = treatmentScenario.paymentReq21
+      paymentReq22 = treatmentScenario.paymentReq22
+      paymentReq23 = treatmentScenario.paymentReq23
+      paymentReq32 = treatmentScenario.paymentReq32
+      paymentReq33 = treatmentScenario.paymentReq33
+      paymentReq42 = treatmentScenario.paymentReq42
+      paymentReq52 = treatmentScenario.paymentReq52
+      paymentReq62 = treatmentScenario.paymentReq62
+      paymentReq63 = treatmentScenario.paymentReq63
+      paymentReq71 = treatmentScenario.paymentReq71
+      originalPolicy1 = treatmentScenario.appointment.referral.insurancePolicies.patient1.originalPolicyCid
+      originalPolicy2 = treatmentScenario.appointment.referral.insurancePolicies.patient2.originalPolicyCid
+      originalPolicy3 = treatmentScenario.appointment.referral.insurancePolicies.patient3.originalPolicyCid
+      _originalPolicy4 = treatmentScenario.appointment.referral.insurancePolicies.patient4.originalPolicyCid
+      originalPolicy5 = treatmentScenario.appointment.referral.insurancePolicies.patient5.originalPolicyCid
+      originalPolicy6 = treatmentScenario.appointment.referral.insurancePolicies.patient6.originalPolicyCid
+      originalPolicy7 = treatmentScenario.appointment.referral.insurancePolicies.patient7.originalPolicyCid
+
+
+    claim1 <- payerAccept payer1 paymentReq11
+    _claimReceiptAndUpdatedPolicy1 <- payerPay payer1 claim1 originalPolicy1
+    patientObligation1 <- patientAccept patient1 paymentReq11
+    _patientReceipt1 <- patientPay patient1 patientObligation1
+
+    _claim12 <- payerAccept payer1 paymentReq12
+    -- the claim can be paid within the application
+    _patientObligation12 <- patientAccept patient1 paymentReq12
+    -- the obligation can be paid within the application
+
+    _claim21 <- payerAccept payer1 paymentReq21
+    _patientObligation2 <- patientAccept patient2 paymentReq21
+
+    claim22 <- payerAccept payer1 paymentReq22
+    claimReceiptAndUpdatedPolicy22 <- payerPay payer1 claim22 originalPolicy2
+    patientObligation22 <- patientAccept patient2 paymentReq22
+    _patientReceipt12 <- patientPay patient2 patientObligation22
+
+    claim23 <- payerAccept payer1 paymentReq23
+    _claimReceiptAndUpdatedPolicy23 <- payerPay payer1 claim23 (snd claimReceiptAndUpdatedPolicy22)
+    patientObligation23 <- patientAccept patient2 paymentReq23
+    _patientReceipt23 <- patientPay patient2 patientObligation23
+
+    claim32 <- payerAccept payer1 paymentReq32
+    _claimReceiptAndUpdatedPolicy32 <- payerPay payer1 claim32 originalPolicy3
+    patientObligation32 <- patientAccept patient3 paymentReq32
+    _patientReceipt32 <- patientPay patient3 patientObligation32
+
+    _claim33 <- payerAccept payer1 paymentReq33
+    -- the claim can be paid within the application
+    _patientObligation33 <- patientAccept patient3 paymentReq33
+    -- the obligation can be paid within the application
+
+    _claim42 <- payerAccept payer1 paymentReq42
+    -- the claim can be paid within the application
+    _patientObligation42 <- patientAccept patient4 paymentReq42
+    -- the obligation can be paid within the application
+
+    claim52 <- payerAccept payer1 paymentReq52
+    _claimReceiptAndUpdatedPolicy52 <- payerPay payer1 claim52 originalPolicy5
+    patientObligation52 <- patientAccept patient5 paymentReq52
+    _patientReceipt52 <- patientPay patient5 patientObligation52
+
+    claim62 <- payerAccept payer1 paymentReq62
+    _claimReceiptAndUpdatedPolicy62 <- payerPay payer1 claim62 originalPolicy6
+    patientObligation62 <- patientAccept patient6 paymentReq62
+    _patientReceipt62 <- patientPay patient6 patientObligation62
+
+    _claim63 <- payerAccept payer1 paymentReq63
+    -- the claim can be paid within the application
+    _patientObligation63 <- patientAccept patient6 paymentReq63
+    -- the obligation can be paid within the application
+
+    claim71 <- payerAccept payer1 paymentReq71
+    _claimReceiptAndUpdatedPolicy71 <- payerPay payer1 claim71 originalPolicy7
+    patientObligation71 <- patientAccept patient7 paymentReq71
+    _patientReceipt71 <- patientPay patient7 patientObligation71
+
+    return ()

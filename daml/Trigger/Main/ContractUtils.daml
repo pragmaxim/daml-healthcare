@@ -1,0 +1,6 @@
+module Trigger.Main.ContractUtils where
+
+type Contract a = (ContractId a, a)
+
+filterContractIds: (a -> Bool) -> [Contract a] -> [ContractId a]
+filterContractIds p contracts = [id | (id, value) <- contracts, p value]

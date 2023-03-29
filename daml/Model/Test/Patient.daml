@@ -1,0 +1,71 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+
+module Model.Test.Patient where
+
+import Model.Test.Onboard
+import Model.Main.Patient
+import Model.Test.ReferenceData
+import Model.Main.Procedure
+import Model.Main.Policy
+import DA.Map
+import Daml.Script
+
+
+data PatientScenarioOutput =
+  PatientScenarioOutput with
+    onboardResult : OnboardResult
+    patient1Role : ContractId Patient
+    disclosedPolicyCid : ContractId DisclosedPolicy
+    originalPolicyCid : ContractId InsurancePolicy
+
+onboardPatient parties@Parties{..} = script
+  do
+
+    onboard <- onboard parties
+    let
+      payerRole = onboard.payerRole
+      patient1Role = onboard.patient1Role
+      _provider1Role = onboard.provider1Role
+
+    policyReq <- patient1 `submit` do
+      exerciseCmd patient1Role RequestInsurancePolicy with
+        payer = payer1
+        policyType = patient1_PolicyType
+
+
+    procedures <- payer1 `submit` do
+      createProcedureList payer1 patient1_PolicyType procedureCodeList
+    policyAcceptOutput <- payer1 `submit` do
+      let procedureMap = fromList $ zip procedureCodeList procedures
+      exerciseCmd policyReq AcceptMember with
+        payerCid = payerRole
+        insuranceID = patient1_InsuranceId
+        undisclosedProcedureList = procedureMap
+
+    patient1RoleWithPolicy <- patient1 `submit` do
+      exerciseCmd patient1Role SetInsurancePolicy with
+        notifyCid = snd policyAcceptOutput
+
+    pcpReq <- patient1 `submit` do
+      exerciseCmd patient1RoleWithPolicy RequestPrimaryCareProvider with
+        primaryCareProvider = provider1
+
+    pcpNotifyCid <- provider1 `submit` do
+      exerciseCmd pcpReq AcceptPatient with
+        providerID = provider1_HIN
+
+    patient1Role <- patient1 `submit` do
+      exerciseCmd patient1RoleWithPolicy SetPrimaryCareProvider with
+        notifyCid = pcpNotifyCid
+
+    disclosedPolicyCid <- patient1 `submit` do
+      exerciseCmd (fst policyAcceptOutput) DisclosePolicy with
+        receivers = [provider1]
+
+    return PatientScenarioOutput with
+      onboardResult = onboard
+      originalPolicyCid = fst policyAcceptOutput, ..

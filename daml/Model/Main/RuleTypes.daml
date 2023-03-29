@@ -1,0 +1,50 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+
+module Model.Main.RuleTypes where
+
+import Model.Main.Policy
+import Model.Main.NetworkContract
+import Model.Main.Types
+import Model.Main.Referral
+
+-- Represents a function that return true if the checks match the expectations
+type RuleFunc = Party -> RuleParameters -> Update Bool;
+
+-- Data used to run the rules check
+data RuleParameters = RuleParameters with
+  policy : ContractId DisclosedPolicy
+  encounterDetails : EncounterDetails
+  networkContract : ContractId ProviderNetworkContract
+  referral : Optional (ContractId Referral)
+    deriving (Eq, Show)
+
+-- Update the policy parameter with a given value
+updatePolicyParam : RuleParameters -> ContractId DisclosedPolicy -> RuleParameters
+updatePolicyParam ruleParams newPolicy =
+  RuleParameters with
+    policy = newPolicy
+    encounterDetails = ruleParams.encounterDetails
+    networkContract = ruleParams.networkContract
+    referral = ruleParams.referral
+
+-- Update the referral with a given value
+updateReferralParam : RuleParameters -> ContractId Referral -> RuleParameters
+updateReferralParam ruleParams newReferral =
+  RuleParameters with
+    policy = ruleParams.policy
+    encounterDetails = ruleParams.encounterDetails
+    networkContract = ruleParams.networkContract
+    referral = Some newReferral
+
+-- Update the encounterDetails with a given value
+updateEncounterParam : RuleParameters -> EncounterDetails -> RuleParameters
+updateEncounterParam ruleParams newEncounterDetails =
+  RuleParameters with
+    policy = ruleParams.policy
+    encounterDetails = newEncounterDetails
+    networkContract = ruleParams.networkContract
+    referral = ruleParams.referral

@@ -1,0 +1,34 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+
+module Model.Test.Claim where
+
+import Model.Test.Onboard
+import Model.Test.Treatment
+import Model.Main.Claim
+import Daml.Script
+
+claimTest = script do
+    parties@Parties{..} <- allocateParties
+
+    treatmentScenario <- treatmentTest parties
+    let
+      paymentReq = treatmentScenario.paymentReq
+      originalPolicy = treatmentScenario.originalPolicy
+
+    claim <- payer1 `submit`
+      exerciseCmd paymentReq.claimReq AcceptClaimRequest
+
+    _claimReceipt <- payer1 `submit` do
+      exerciseCmd claim PayClaim
+
+    patientObligation <- patient1 `submit`
+      exerciseCmd paymentReq.patientReq AcceptPatientObligation
+
+    _patientReceipt <- patient1 `submit`
+      exerciseCmd patientObligation PayPatientObligation
+
+    return ()

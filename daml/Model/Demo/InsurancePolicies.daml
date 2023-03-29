@@ -1,0 +1,230 @@
+module Model.Demo.InsurancePolicies where
+
+import Model.Main.Payer
+import Model.Main.Patient
+import Model.Main.Types
+import Model.Main.Procedure
+import Model.Main.Policy
+import Model.Demo.NetworkContracts qualified as NC
+import Model.Demo.ReferenceData
+import DA.Map
+import Daml.Script
+
+data InsurancePoliciesData = InsurancePoliciesData
+  with
+    networkContracts: NC.NetworkContractSet
+    patient1: InsurancePoliciesDataEntry4
+    patient2: InsurancePoliciesDataEntry3
+    patient3: InsurancePoliciesDataEntry3
+    patient4: InsurancePoliciesDataEntry3
+    patient5: InsurancePoliciesDataEntry3
+    patient6: InsurancePoliciesDataEntry3
+    patient7: InsurancePoliciesDataEntry3
+    patient8: InsurancePoliciesDataEntry1
+    patient9: InsurancePoliciesDataEntry1
+    patient10: InsurancePoliciesDataEntry1
+  deriving (Eq, Show)
+
+data InsurancePoliciesDataEntry1 = InsurancePoliciesDataEntry1
+  with
+    patientRole: ContractId Patient
+    disclosedPolicyCid1: ContractId DisclosedPolicy
+    originalPolicyCid: ContractId InsurancePolicy
+  deriving (Eq, Show)
+data InsurancePoliciesDataEntry3 = InsurancePoliciesDataEntry3
+  with
+    patientRole: ContractId Patient
+    disclosedPolicyCid1: ContractId DisclosedPolicy
+    disclosedPolicyCid2: ContractId DisclosedPolicy
+    disclosedPolicyCid3: ContractId DisclosedPolicy
+    originalPolicyCid: ContractId InsurancePolicy
+  deriving (Eq, Show)
+data InsurancePoliciesDataEntry4 = InsurancePoliciesDataEntry4
+  with
+    patientRole: ContractId Patient
+    disclosedPolicyCid1: ContractId DisclosedPolicy
+    disclosedPolicyCid2: ContractId DisclosedPolicy
+    disclosedPolicyCid3: ContractId DisclosedPolicy
+    disclosedPolicyCid4: ContractId DisclosedPolicy
+    originalPolicyCid: ContractId InsurancePolicy
+  deriving (Eq, Show)
+
+requestInsurancePolicy : Party -> Party -> ContractId Patient ->  PolicyType -> Script (ContractId RequestPayerForPolicy)
+requestInsurancePolicy payer1 patient patientRole policyType = do
+  patient `submit` do
+    exerciseCmd patientRole RequestInsurancePolicy with
+      payer = payer1
+      policyType = policyType
+
+acceptPatientByPayer : Party -> ContractId Payer ->  ContractId RequestPayerForPolicy -> Text -> Script (ContractId InsurancePolicy, ContractId NotifyPatientOfPayerAcceptance)
+acceptPatientByPayer payer1 payerRole policyReq insuranceId = do
+  procedures <- submit payer1 do
+    createProcedureList payer1 patient1_PolicyType procedureCodeList
+  payer1 `submit` do
+    let procedureMap = fromList $ zip procedureCodeList procedures
+    exerciseCmd policyReq AcceptMember with payerCid = payerRole; insuranceID = insuranceId; undisclosedProcedureList = procedureMap
+
+setInsurancePolicy : Party -> ContractId Patient -> ContractId NotifyPatientOfPayerAcceptance -> Script (ContractId Patient)
+setInsurancePolicy patient patientRole notifyPatientOfPayerAcceptance =
+  patient `submit` do
+    exerciseCmd patientRole SetInsurancePolicy with notifyCid = notifyPatientOfPayerAcceptance
+
+requestPrimaryCareProvider : Party -> Party -> ContractId Patient -> Script (ContractId PrimaryCareProviderRequest)
+requestPrimaryCareProvider provider1 patient patientRoleWithPolicy = do
+  patient `submit` do
+      exerciseCmd patientRoleWithPolicy RequestPrimaryCareProvider with primaryCareProvider = provider1
+
+acceptPatientByPrimaryCareProvider : Party -> ContractId PrimaryCareProviderRequest -> Script (ContractId NotifyPatientOfPCPAcceptance)
+acceptPatientByPrimaryCareProvider provider1 pcpReq = do
+  provider1 `submit` do exerciseCmd pcpReq AcceptPatient with providerID = provider1_HIN
+
+setPrimaryCareProvider : Party -> ContractId Patient -> ContractId NotifyPatientOfPCPAcceptance -> Script (ContractId Patient)
+setPrimaryCareProvider patient patientRoleWithPolicy pcpNotifyCid =
+  patient `submit` do
+    exerciseCmd patientRoleWithPolicy SetPrimaryCareProvider with
+      notifyCid = pcpNotifyCid
+
+disclosePolicy : Party -> Party -> ContractId InsurancePolicy -> Script (ContractId DisclosedPolicy)
+disclosePolicy patient provider insurancePolicy = do
+  --provider1 <- provider1_party
+  patient `submit` do
+    exerciseCmd insurancePolicy DisclosePolicy with receivers = [provider]
+
+-- standalone version to view it in DAML Studio
+insurancePoliciesSet' = insurancePoliciesSet =<< allocateParties
+
+insurancePoliciesSet parties@Parties{..} = script
+  do
+    ncs <- NC.networkContractsSet parties
+
+    policyReq1 <- requestInsurancePolicy payer1 patient1 ncs.onboard.patient1Role patient1_PolicyType
+    (policyAcceptOutput1_fst, policyAcceptOutput1_snd) <- acceptPatientByPayer payer1 ncs.onboard.payerRole policyReq1 patient1_InsuranceId
+    patient1RoleWithPolicy <- setInsurancePolicy patient1 ncs.onboard.patient1Role policyAcceptOutput1_snd
+    pcpReq1 <- requestPrimaryCareProvider provider1 patient1 patient1RoleWithPolicy
+    pcpNotifyCid1 <- acceptPatientByPrimaryCareProvider provider1 pcpReq1
+    patient1RoleP <- setPrimaryCareProvider patient1 patient1RoleWithPolicy pcpNotifyCid1
+
+    disclosedPolicyCid11 <- disclosePolicy patient1 provider2 policyAcceptOutput1_fst
+    disclosedPolicyCid12 <- disclosePolicy patient1 provider1 policyAcceptOutput1_fst
+    disclosedPolicyCid13 <- disclosePolicy patient1 provider1 policyAcceptOutput1_fst
+    disclosedPolicyCid14 <- disclosePolicy patient1 provider2 policyAcceptOutput1_fst
+
+    policyReq2 <- requestInsurancePolicy payer1 patient2 ncs.onboard.patient2Role patient2_PolicyType
+    (policyAcceptOutput2_fst, policyAcceptOutput2_snd) <- acceptPatientByPayer payer1 ncs.onboard.payerRole policyReq2 patient2_InsuranceId
+    patient2RoleWithPolicy <- setInsurancePolicy patient2 ncs.onboard.patient2Role policyAcceptOutput2_snd
+    pcpReq2 <- requestPrimaryCareProvider provider1 patient2 patient2RoleWithPolicy
+    pcpNotifyCid2 <- acceptPatientByPrimaryCareProvider provider1 pcpReq2
+    patient2RoleP <- setPrimaryCareProvider patient2 patient2RoleWithPolicy pcpNotifyCid2
+
+    disclosedPolicyCid21 <- disclosePolicy patient2 provider2 policyAcceptOutput2_fst
+    disclosedPolicyCid22 <- disclosePolicy patient2 provider1 policyAcceptOutput2_fst
+    disclosedPolicyCid23 <- disclosePolicy patient2 provider2 policyAcceptOutput2_fst
+
+    policyReq3 <- requestInsurancePolicy payer1 patient3 ncs.onboard.patient3Role patient3_PolicyType
+    (policyAcceptOutput3_fst, policyAcceptOutput3_snd) <- acceptPatientByPayer payer1 ncs.onboard.payerRole policyReq3 patient3_InsuranceId
+    patient3RoleWithPolicy <- setInsurancePolicy patient3 ncs.onboard.patient3Role policyAcceptOutput3_snd
+    pcpReq3 <- requestPrimaryCareProvider provider1 patient3 patient3RoleWithPolicy
+    pcpNotifyCid3 <- acceptPatientByPrimaryCareProvider provider1 pcpReq3
+    patient3RoleP <- setPrimaryCareProvider patient3 patient3RoleWithPolicy pcpNotifyCid3
+
+    disclosedPolicyCid31 <- disclosePolicy patient3 provider2 policyAcceptOutput3_fst
+    disclosedPolicyCid32 <- disclosePolicy patient3 provider1 policyAcceptOutput3_fst
+    disclosedPolicyCid33 <- disclosePolicy patient3 provider2 policyAcceptOutput3_fst
+
+    policyReq4 <- requestInsurancePolicy payer1 patient4 ncs.onboard.patient4Role patient4_PolicyType
+    (policyAcceptOutput4_fst, policyAcceptOutput4_snd) <- acceptPatientByPayer payer1 ncs.onboard.payerRole policyReq4 patient4_InsuranceId
+    patient4RoleWithPolicy <- setInsurancePolicy patient4 ncs.onboard.patient4Role policyAcceptOutput4_snd
+    pcpReq4 <- requestPrimaryCareProvider provider1 patient4 patient4RoleWithPolicy
+    pcpNotifyCid4 <- acceptPatientByPrimaryCareProvider provider1 pcpReq4
+    patient4RoleP <- setPrimaryCareProvider patient4 patient4RoleWithPolicy pcpNotifyCid4
+
+    disclosedPolicyCid41 <- disclosePolicy patient4 provider2 policyAcceptOutput4_fst
+    disclosedPolicyCid42 <- disclosePolicy patient4 provider1 policyAcceptOutput4_fst
+    disclosedPolicyCid43 <- disclosePolicy patient4 provider2 policyAcceptOutput4_fst
+
+    policyReq5 <- requestInsurancePolicy payer1 patient5 ncs.onboard.patient5Role patient5_PolicyType
+    (policyAcceptOutput5_fst, policyAcceptOutput5_snd) <- acceptPatientByPayer payer1 ncs.onboard.payerRole policyReq5 patient5_InsuranceId
+    patient5RoleWithPolicy <- setInsurancePolicy patient5 ncs.onboard.patient5Role policyAcceptOutput5_snd
+    pcpReq5 <- requestPrimaryCareProvider provider1 patient5 patient5RoleWithPolicy
+    pcpNotifyCid5 <- acceptPatientByPrimaryCareProvider provider1 pcpReq5
+    patient5RoleP <- setPrimaryCareProvider patient5 patient5RoleWithPolicy pcpNotifyCid5
+
+    disclosedPolicyCid51 <- disclosePolicy patient5 provider2 policyAcceptOutput5_fst
+    disclosedPolicyCid52 <- disclosePolicy patient5 provider1 policyAcceptOutput5_fst
+    disclosedPolicyCid53 <- disclosePolicy patient5 provider2 policyAcceptOutput5_fst
+
+    policyReq6 <- requestInsurancePolicy payer1 patient6 ncs.onboard.patient6Role patient6_PolicyType
+    (policyAcceptOutput6_fst, policyAcceptOutput6_snd)  <- acceptPatientByPayer payer1 ncs.onboard.payerRole policyReq6 patient6_InsuranceId
+    patient6RoleWithPolicy <- setInsurancePolicy patient6 ncs.onboard.patient6Role policyAcceptOutput6_snd
+    pcpReq6 <- requestPrimaryCareProvider provider1 patient6 patient6RoleWithPolicy
+    pcpNotifyCid6 <- acceptPatientByPrimaryCareProvider provider1 pcpReq6
+    patient6RoleP <- setPrimaryCareProvider patient6 patient6RoleWithPolicy pcpNotifyCid6
+
+    disclosedPolicyCid61 <- disclosePolicy patient6 provider2 policyAcceptOutput6_fst
+    disclosedPolicyCid62 <- disclosePolicy patient6 provider1 policyAcceptOutput6_fst
+    disclosedPolicyCid63 <- disclosePolicy patient6 provider2 policyAcceptOutput6_fst
+
+    policyReq7 <- requestInsurancePolicy payer1 patient7 ncs.onboard.patient7Role patient7_PolicyType
+    (policyAcceptOutput7_fst, policyAcceptOutput7_snd) <- acceptPatientByPayer payer1 ncs.onboard.payerRole policyReq7 patient7_InsuranceId
+    patient7RoleWithPolicy <- setInsurancePolicy patient7 ncs.onboard.patient7Role policyAcceptOutput7_snd
+    pcpReq7 <- requestPrimaryCareProvider provider1 patient7 patient7RoleWithPolicy
+    pcpNotifyCid7 <- acceptPatientByPrimaryCareProvider provider1 pcpReq7
+    patient7RoleP <- setPrimaryCareProvider patient7 patient7RoleWithPolicy pcpNotifyCid7
+
+    disclosedPolicyCid71 <- disclosePolicy patient7 provider2 policyAcceptOutput7_fst
+    disclosedPolicyCid72 <- disclosePolicy patient7 provider1 policyAcceptOutput7_fst
+    disclosedPolicyCid73 <- disclosePolicy patient7 provider2 policyAcceptOutput7_fst
+
+    policyReq8 <- requestInsurancePolicy payer1 patient8 ncs.onboard.patient8Role patient8_PolicyType
+    (policyAcceptOutput8_fst, policyAcceptOutput8_snd) <- acceptPatientByPayer payer1 ncs.onboard.payerRole policyReq8 patient8_InsuranceId
+    patient8RoleWithPolicy <- setInsurancePolicy patient8 ncs.onboard.patient8Role policyAcceptOutput8_snd
+    pcpReq8 <- requestPrimaryCareProvider provider1 patient8 patient8RoleWithPolicy
+    pcpNotifyCid8 <- acceptPatientByPrimaryCareProvider provider1 pcpReq8
+    patient8RoleP <- setPrimaryCareProvider patient8 patient8RoleWithPolicy pcpNotifyCid8
+
+    disclosedPolicyCid8 <- disclosePolicy patient8 provider2 policyAcceptOutput8_fst
+
+    policyReq9 <- requestInsurancePolicy payer1 patient9 ncs.onboard.patient9Role patient9_PolicyType
+    (policyAcceptOutput9_fst, policyAcceptOutput9_snd) <- acceptPatientByPayer payer1 ncs.onboard.payerRole policyReq9 patient9_InsuranceId
+    patient9RoleWithPolicy <- setInsurancePolicy patient9 ncs.onboard.patient9Role policyAcceptOutput9_snd
+    pcpReq9 <- requestPrimaryCareProvider provider1 patient9 patient9RoleWithPolicy
+    pcpNotifyCid9 <- acceptPatientByPrimaryCareProvider provider1 pcpReq9
+    patient9RoleP <- setPrimaryCareProvider patient9 patient9RoleWithPolicy pcpNotifyCid9
+
+    disclosedPolicyCid9 <- disclosePolicy patient9 provider1 policyAcceptOutput9_fst
+
+    policyReq10 <- requestInsurancePolicy payer1 patient10 ncs.onboard.patient10Role patient10_PolicyType
+    (policyAcceptOutput10_fst, policyAcceptOutput10_snd) <- acceptPatientByPayer payer1 ncs.onboard.payerRole policyReq10 patient10_InsuranceId
+    patient10RoleWithPolicy <- setInsurancePolicy patient10 ncs.onboard.patient10Role policyAcceptOutput10_snd
+    pcpReq10 <- requestPrimaryCareProvider provider1 patient10 patient10RoleWithPolicy
+    pcpNotifyCid10 <- acceptPatientByPrimaryCareProvider provider1 pcpReq10
+    patient10RoleP <- setPrimaryCareProvider patient10 patient10RoleWithPolicy pcpNotifyCid10
+
+    disclosedPolicyCid10 <- disclosePolicy patient10 provider1 policyAcceptOutput10_fst
+
+    let
+      ncsP = ncs with
+        onboard = ncs.onboard with
+          patient1Role = patient1RoleP
+          patient2Role = patient2RoleP
+          patient3Role = patient3RoleP
+          patient4Role = patient4RoleP
+          patient5Role = patient5RoleP
+          patient6Role = patient6RoleP
+          patient7Role = patient7RoleP
+          patient8Role = patient8RoleP
+          patient9Role = patient9RoleP
+          patient10Role = patient10RoleP
+
+    return InsurancePoliciesData with
+      networkContracts = ncsP
+      patient1 = InsurancePoliciesDataEntry4 patient1RoleP disclosedPolicyCid11 disclosedPolicyCid12 disclosedPolicyCid13 disclosedPolicyCid14 policyAcceptOutput1_fst
+      patient2 = InsurancePoliciesDataEntry3 patient2RoleP disclosedPolicyCid21 disclosedPolicyCid22 disclosedPolicyCid23 policyAcceptOutput2_fst
+      patient3 = InsurancePoliciesDataEntry3 patient3RoleP disclosedPolicyCid31 disclosedPolicyCid32 disclosedPolicyCid33 policyAcceptOutput3_fst
+      patient4 = InsurancePoliciesDataEntry3 patient4RoleP disclosedPolicyCid41 disclosedPolicyCid42 disclosedPolicyCid43 policyAcceptOutput4_fst
+      patient5 = InsurancePoliciesDataEntry3 patient5RoleP disclosedPolicyCid51 disclosedPolicyCid52 disclosedPolicyCid53 policyAcceptOutput5_fst
+      patient6 = InsurancePoliciesDataEntry3 patient6RoleP disclosedPolicyCid61 disclosedPolicyCid62 disclosedPolicyCid63 policyAcceptOutput6_fst
+      patient7 = InsurancePoliciesDataEntry3 patient7RoleP disclosedPolicyCid71 disclosedPolicyCid72 disclosedPolicyCid73 policyAcceptOutput7_fst
+      patient8 = InsurancePoliciesDataEntry1 patient8RoleP disclosedPolicyCid8 policyAcceptOutput8_fst
+      patient9 = InsurancePoliciesDataEntry1 patient9RoleP disclosedPolicyCid9 policyAcceptOutput9_fst
+      patient10 = InsurancePoliciesDataEntry1 patient10RoleP disclosedPolicyCid10 policyAcceptOutput10_fst

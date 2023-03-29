@@ -1,0 +1,136 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+module Model.Test.ReferenceData where
+
+import Model.Main.Types
+import DA.Map
+import DA.Date
+import DA.Time
+import DA.Optional
+
+-- InsuranceCompany
+payer1_payerHIN = "PAY1"
+payer1_payerName = "InsuranceCompany"
+payer1_payerTaxID = "11-222222"
+payer1_payerBankDFINumber = "123456789"
+payer1_payerBankAccountNumber = "12345678901"
+payer1_payerAddressFirstLine = "Payer Address Line 1"
+payer1_payerAddressSecondLine = "Payer Address Line 2"
+payer1_payerCity = "Louisville"
+payer1_payerState = "KY"
+payer1_payerZipCode = "12345"
+
+
+patient1_Name = "John Doe"
+patient1_Gender = "Male"
+patient1_InsuranceId = "1234"
+patient1_PolicyType = Gold
+patient1_SocialSecurityNumber = "9999999"
+patient1_DateOfBirth = date 1975 Jan 1
+patient1_Address = "1234 John St."
+patient1_diagnosisCode = "ABCDE"
+patient1_procedureCode = "12345"
+patient1_globalEncounterId = "1010101010"
+patient1_appointmentTime = time (date 2018 Dec 31) 16 0 0
+patient1_AddressLine2 = ""
+patient1_City = "Cincinnati"
+patient1_State = "OH"
+patient1_ZipCode = "45206"
+patient1_deductible = 1000.0 : Decimal
+
+-- Primary healthcare provider
+provider1_name = "Dr. John Smith"
+provider1_HIN = "HIN-1234"
+provider1_type = "Primary Care Provider"
+provider1_providerTaxID = "33-444444"
+provider1_providerBankDFINumber = "123456789"
+provider1_providerBankAccountNumber = "12345678901"
+provider1_providerAddressFirstLine = "Provider 1 Address 1st Line"
+provider1_providerAddressSecondLine = "Provider 1 Address 2nd Line"
+provider1_providerCity = "Cincinnati"
+provider1_providerState = "Ohio"
+provider1_providerZipCode = "54321"
+
+-- Specialist healthcare provider
+provider2_name = "X-ray Labs"
+provider2_HIN = "HIN-5678"
+provider2_type = "Radiologist"
+provider2_providerTaxID = "55-666666"
+provider2_providerBankDFINumber = "123456789"
+provider2_providerBankAccountNumber = "12345678901"
+provider2_providerAddressFirstLine = "Provider 2 Address 1st Line"
+provider2_providerAddressSecondLine = "Provider 2 Address 2nd Line"
+provider2_providerCity = "Cincinnati"
+provider2_providerState = "Ohio"
+provider2_providerZipCode = "98765"
+
+payerDemographics = PayerDemographics
+  with
+    payerHIN = "payer HIN 1"
+    payerTaxID = "payer Tax Id 1"
+    payerBankDFINumber = "payer Bank DFI 1"
+    payerBankAccountNumber = "payer Bank Account 1"
+    payerAddressFirstLine = "payer Address Line 1"
+    payerAddressSecondLine = "payer Address Line 2"
+    payerCity = "payer City 1"
+    payerState = "payer State 1"
+    payerZipCode = "payer Zip Code 1"
+
+provider1Demographics = ProviderDemographics
+  with
+    providerHIN = "provider1 HIN"
+    providerTaxID = "provider1 Tax Id"
+    providerBankDFINumber = "provider1 Bank DFI"
+    providerBankAccountNumber = "provider1 Bank Account"
+    providerType = Primary
+    providerAddressFirstLine = "provider1 Address Line 1"
+    providerAddressSecondLine = "provider1 Address Line 2"
+    providerCity = "provider1 City"
+    providerState = "provider1 State"
+    providerZipCode = "provider1 Zip Code"
+
+provider2Demographics = ProviderDemographics
+  with
+    providerHIN = "provider2 HIN"
+    providerTaxID = "provider2 Tax Id"
+    providerBankDFINumber = "provider2 Bank DFI"
+    providerBankAccountNumber = "provider2 Bank Account"
+    providerType = Specialist
+    providerAddressFirstLine = "provider2 Address Line 1"
+    providerAddressSecondLine = "provider2 Address Line 2"
+    providerCity = "provider2 City"
+    providerState = "provider2 State"
+    providerZipCode = "provider2 Zip Code"
+
+patient1Demographics = PatientDemographics
+  with
+    patientGender = "Male"
+    patientSocialSecurityNumber = "SSN1"
+    patientDateOfBirth = "1/1/1960"
+    patientAddressLine1 = "patient Address Line 1"
+    patientAddressLine2 = "patient Address Line 2"
+    patientCity = "patient City"
+    patientState = "patient State"
+    patientZipCode = "patient Zip Code"
+
+feeSchedule : FeeSchedule
+  = fromList [
+      (X_Ray_Wrist_2_Views, 105.0),
+      (X_Ray_Wrist_3_Views, 25.0)]
+
+procedureCodeList = [X_Ray_Wrist_2_Views, X_Ray_Wrist_3_Views]
+
+patient1Encounter = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "John Doe"
+    encounterId = "encounter1"
+    procedureCode = X_Ray_Wrist_3_Views
+    diagnosisCode = Fracture_of_scaphoid_bone_right_wrist_S62_001
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"

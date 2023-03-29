@@ -1,0 +1,62 @@
+{-# LANGUAGE LambdaCase #-}
+
+
+module Model.Main.Appointment where
+
+import DA.Date
+
+import Model.Main.Treatment
+import Model.Main.Types()
+import Model.Main.Policy
+import Model.Main.Rules
+import Model.Main.RuleTypes
+import Model.Main.CostCalculation qualified as CC
+
+-- A scheduled appointment
+template Appointment
+  with
+    operator : Party
+    provider : Party
+    patient : Party
+    policy : ContractId DisclosedPolicy
+    encounterDetails : RuleParameters
+    appointmentTime : Time
+  where
+    signatory provider
+    observer patient
+
+    choice CheckInPatient : Either (ContractId FailedCheckIn) (ContractId Treatment) with 
+      controller provider
+      do
+        now <- getTime
+        assertMsg ("Check-in should happen on right day for appointment at: " <> show appointmentTime) $
+          toDateUTC now == toDateUTC appointmentTime
+        rulesCheck <- create RulesCheck with
+          requestingParty = provider
+          ruleParams = encounterDetails
+        exercise rulesCheck CheckAdjudication >>= 
+          \case
+          None ->
+            do
+              disclosedPolicy <- fetch encounterDetails.policy
+              assert $ provider `elem` disclosedPolicy.receivers
+              newEncounterDetails <- (CC.calculateCosts encounterDetails CC.Treatment)
+              apptReq <- create Treatment with
+                policy = encounterDetails.policy
+                encounterDetails = newEncounterDetails, ..
+              return $ Right apptReq
+          Some reason ->
+            do
+              failed <- create FailedCheckIn with ..
+              return $ Left failed
+
+-- The error state in case the check-in doesn't pass the rules check
+template FailedCheckIn
+  with
+    operator : Party
+    provider : Party
+    patient: Party
+    appointmentTime: Time
+    reason : Text
+  where
+    signatory provider

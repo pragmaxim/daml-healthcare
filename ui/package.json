@@ -1,0 +1,74 @@
+{
+  "name": "example-create-daml-app",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@craco/craco": "6.4.3",
+    "@daml.js/daml-healthcare-0.1.0": "file:daml.js/daml-healthcare-0.1.0",
+    "@daml/ledger": "=2.6.0-snapshot.20221218.11169.0.9d007b31",
+    "@daml/react": "=2.6.0-snapshot.20221218.11169.0.9d007b31",
+    "@daml/types": "=2.6.0-snapshot.20221218.11169.0.9d007b31",
+    "@daml/hub-react": "^1.0.0",
+    "@fontsource/alata": "^4.5.9",
+    "autoprefixer": "9.8.8",
+    "buffer": "^6.0.3",
+    "crypto-browserify": "^3.12.0",
+    "dateformat": "^5.0.3",
+    "dotenv": "^16.0.3",
+    "formik": "^2.2.9",
+    "history": "^5.3.0",
+    "jwt-simple": "^0.5.6",
+    "nodemon": "^2.0.20",
+    "phosphor-icons": "^1.4.2",
+    "phosphor-react": "^1.4.1",
+    "postcss": "7.0.39",
+    "prettier": "^2.8.4",
+    "react": "^17.0.2",
+    "react-day-picker": "^7.4.8",
+    "react-dom": "^17.0.2",
+    "react-modal": "^3.13.1",
+    "react-router-dom": "^6.0.1",
+    "react-select": "^5.0.1",
+    "react-time-picker": "^4.0.3",
+    "semantic-ui-css": "^2.5.0",
+    "semantic-ui-react": "^2.1.4",
+    "tailwindcss": "npm:@tailwindcss/postcss7-compat"
+  },
+  "scripts": {
+    "start": "craco start",
+    "build": "craco build",
+    "test": "craco test --testURL='http://localhost:7575'",
+    "eject": "react-scripts eject",
+    "lint": "eslint --ext .js,.jsx,.ts,.tsx src/"
+  },
+  "eslintConfig": {
+    "extends": "react-app"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@types/dateformat": "^5.0.0",
+    "@types/dotenv": "^8.2.0",
+    "@types/jest": "^29.4.0",
+    "@types/jwt-simple": "^0.5.33",
+    "@types/react": "^17.0.2",
+    "@types/react-dom": "^17.0.2",
+    "@types/react-modal": "^3.13.1",
+    "@types/react-select": "^5.0.1",
+    "@types/react-time-picker": "^4.0.3",
+    "http-proxy-middleware": "^2.0.6",
+    "postcss-for": "^2.1.1",
+    "react-scripts": "^4.0.3",
+    "typescript": "4.9.5"
+  }
+}

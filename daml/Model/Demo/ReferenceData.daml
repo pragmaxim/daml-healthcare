@@ -1,0 +1,530 @@
+module Model.Demo.ReferenceData where
+
+import Model.Main.Types
+import DA.Map
+import DA.Date
+import DA.Time
+import DA.Optional
+import Daml.Script
+
+data Parties = Parties with
+  operator : Party
+  payer1 : Party
+  provider1 : Party
+  provider2 : Party
+  patient1 : Party
+  patient2 : Party
+  patient3 : Party
+  patient4 : Party
+  patient5 : Party
+  patient6 : Party
+  patient7 : Party
+  patient8 : Party
+  patient9 : Party
+  patient10 : Party
+
+allocateParties : Script Parties
+allocateParties = do
+    operator <- allocateParty "ClearingHouse"
+    payer1 <- allocateParty "InsuranceCompany"
+    provider1 <- allocateParty "PrimaryCareProvider"
+    provider2 <- allocateParty "Radiologist"
+    patient1 <- allocateParty "Patient1"
+    patient2 <- allocateParty "Patient2"
+    patient3 <- allocateParty "Patient3"
+    patient4 <- allocateParty "Patient4"
+    patient5 <- allocateParty "Patient5"
+    patient6 <- allocateParty "Patient6"
+    patient7 <- allocateParty "Patient7"
+    patient8 <- allocateParty "Patient8"
+    patient9 <- allocateParty "Patient9"
+    patient10 <- allocateParty "Patient10"
+    pure Parties{..}
+
+provider1_name = "Dr. Paige Mattel"
+provider1_HIN = "1678917567"
+provider1_type = "Primary Care"
+provider1_providerTaxID = "11-2222222"
+provider1_providerBankDFINumber = "123456789"
+provider1_providerBankAccountNumber = "12346000001"
+provider1_providerAddressFirstLine = "111 1st Avenue"
+provider1_providerAddressSecondLine = "Suite 5"
+provider1_providerCity = "Columbus"
+provider1_providerState = "OH"
+provider1_providerZipCode = "43118"
+
+provider1Demographics = ProviderDemographics
+  with
+    providerHIN = provider1_HIN
+    providerTaxID = provider1_providerTaxID
+    providerBankDFINumber = provider1_providerBankDFINumber
+    providerBankAccountNumber = provider1_providerBankAccountNumber
+    providerType = Primary
+    providerAddressFirstLine = provider1_providerAddressFirstLine
+    providerAddressSecondLine = provider1_providerAddressSecondLine
+    providerCity = provider1_providerCity
+    providerState = provider1_providerState
+    providerZipCode = provider1_providerZipCode
+
+provider2_name = "Beta Imaging Labs"
+provider2_HIN = "3451287342"
+provider2_type = "Radiologist"
+provider2_providerTaxID = "33-4444444"
+provider2_providerBankDFINumber = "987654321"
+provider2_providerBankAccountNumber = "98765000001"
+provider2_providerAddressFirstLine = "222 2nd Ave."
+provider2_providerAddressSecondLine = "Fl 2"
+provider2_providerCity = "Columbus"
+provider2_providerState = "OH"
+provider2_providerZipCode = "43201"
+
+provider2Demographics = ProviderDemographics
+  with
+    providerHIN = provider2_HIN
+    providerTaxID = provider2_providerTaxID
+    providerBankDFINumber = provider2_providerBankDFINumber
+    providerBankAccountNumber = provider2_providerBankAccountNumber
+    providerType = Specialist
+    providerAddressFirstLine = provider2_providerAddressFirstLine
+    providerAddressSecondLine = provider2_providerAddressSecondLine
+    providerCity = provider2_providerCity
+    providerState = provider2_providerState
+    providerZipCode = provider2_providerZipCode
+
+payer1_payerHIN = "79152"
+payer1_payerName = "Insurance Company"
+payer1_payerTaxID = "55-6666666"
+payer1_payerBankDFINumber = "543215432"
+payer1_payerBankAccountNumber = "54300000001"
+payer1_payerAddressFirstLine = "1 River Avenue"
+payer1_payerAddressSecondLine = "Fl 10"
+payer1_payerCity = "Huntsville"
+payer1_payerState = "OR"
+payer1_payerZipCode = "96202"
+
+payer1Demographics = PayerDemographics
+  with
+    payerHIN = payer1_payerHIN
+    payerTaxID = payer1_payerTaxID
+    payerBankDFINumber = payer1_payerBankDFINumber
+    payerBankAccountNumber = payer1_payerBankAccountNumber
+    payerAddressFirstLine = payer1_payerAddressFirstLine
+    payerAddressSecondLine = payer1_payerAddressSecondLine
+    payerCity = payer1_payerCity
+    payerState = payer1_payerState
+    payerZipCode = payer1_payerZipCode
+
+-- Patient1
+patient1_Name = "John Doe"
+patient1_InsuranceId = "AXB-45-6789"
+patient1_PolicyType = Gold
+patient1Demographics = PatientDemographics
+  with
+    patientGender = "Male"
+    patientSocialSecurityNumber = patient1_InsuranceId
+    patientDateOfBirth = "12/7/1980"
+    patientAddressLine1 = "123 Cherry St."
+    patientAddressLine2 = ""
+    patientCity = "Columbus"
+    patientState = "OH"
+    patientZipCode = "43116"
+patient1_appointmentTime1 = time (date 2018 Jan 1) 10 0 0
+patient1_appointmentTime2 = time (date 2018 Jan 2) 10 0 0
+patient1_appointmentTime3 = time (date 2018 Jan 3) 10 0 0
+patient1_appointmentTime4 = time (date 2018 Jan 4) 10 0 0
+-- Patient2
+patient2_Name = "Jim Smith"
+patient2_InsuranceId = "GDR-53-7245"
+patient2_PolicyType = Gold
+patient2Demographics = PatientDemographics
+  with
+    patientGender = "Male"
+    patientSocialSecurityNumber = patient2_InsuranceId
+    patientDateOfBirth = "11/2/1972"
+    patientAddressLine1 = "37 River Dr."
+    patientAddressLine2 = ""
+    patientCity = "Columbus"
+    patientState = "OH"
+    patientZipCode = "43002"
+patient2_appointmentTime1 = time (date 2018 Feb 1) 10 0 0
+patient2_appointmentTime2 = time (date 2018 Feb 2) 10 0 0
+patient2_appointmentTime3 = time (date 2018 Feb 3) 10 0 0
+-- Patient3
+patient3_Name = "Sally Smith"
+patient3_InsuranceId = "QEW-22-9999"
+patient3_PolicyType = Gold
+patient3Demographics = PatientDemographics
+  with
+    patientGender = "Female"
+    patientSocialSecurityNumber = patient3_InsuranceId
+    patientDateOfBirth = "7/12/1980"
+    patientAddressLine1 = "4123 1st Ave."
+    patientAddressLine2 = ""
+    patientCity = "Columbus"
+    patientState = "OH"
+    patientZipCode = "43090"
+patient3_appointmentTime1 = time (date 2018 Mar 1) 10 0 0
+patient3_appointmentTime2 = time (date 2018 Mar 2) 10 0 0
+patient3_appointmentTime3 = time (date 2018 Mar 3) 10 0 0
+-- Patient4
+patient4_Name = "Kim Chao"
+patient4_InsuranceId = "LKV-65-3434"
+patient4_PolicyType = Gold
+patient4Demographics = PatientDemographics
+  with
+    patientGender = "Female"
+    patientSocialSecurityNumber = patient4_InsuranceId
+    patientDateOfBirth = "7/22/1965"
+    patientAddressLine1 = "99 Main St."
+    patientAddressLine2 = ""
+    patientCity = "Columbus"
+    patientState = "OH"
+    patientZipCode = "43221"
+patient4_appointmentTime1 = time (date 2018 Apr 1) 10 0 0
+patient4_appointmentTime2 = time (date 2018 Apr 2) 10 0 0
+patient4_appointmentTime3 = time (date 2018 Apr 3) 10 0 0
+-- Patient5
+patient5_Name = "Ted Walker"
+patient5_InsuranceId = "NVU-12-1345"
+patient5_PolicyType = Gold
+patient5Demographics = PatientDemographics
+  with
+    patientGender = "Male"
+    patientSocialSecurityNumber = patient5_InsuranceId
+    patientDateOfBirth = "3/12/1990"
+    patientAddressLine1 = "300 Spring Rd."
+    patientAddressLine2 = ""
+    patientCity = "Columbus"
+    patientState = "OH"
+    patientZipCode = "43019"
+patient5_appointmentTime1 = time (date 2018 May 1) 10 0 0
+patient5_appointmentTime2 = time (date 2018 May 2) 10 0 0
+patient5_appointmentTime3 = time (date 2018 May 3) 10 0 0
+-- Patient6
+patient6_Name = "Richard Jones"
+patient6_InsuranceId = "PLK-90-9090"
+patient6_PolicyType = Gold
+patient6Demographics = PatientDemographics
+  with
+    patientGender = "Male"
+    patientSocialSecurityNumber = patient6_InsuranceId
+    patientDateOfBirth = "5/14/1975"
+    patientAddressLine1 = "89 Bank Blvd."
+    patientAddressLine2 = ""
+    patientCity = "Columbus"
+    patientState = "OH"
+    patientZipCode = "43189"
+patient6_appointmentTime1 = time (date 2018 Jun 1) 10 0 0
+patient6_appointmentTime2 = time (date 2018 Jun 2) 10 0 0
+patient6_appointmentTime3 = time (date 2018 Jun 3) 10 0 0
+-- Patient7
+patient7_Name = "Kate Andrews"
+patient7_InsuranceId = "ZRX-34-3456"
+patient7_PolicyType = Gold
+patient7Demographics = PatientDemographics
+  with
+    patientGender = "Female"
+    patientSocialSecurityNumber = patient7_InsuranceId
+    patientDateOfBirth = "2/2/1950"
+    patientAddressLine1 = "12 Shady Ln."
+    patientAddressLine2 = ""
+    patientCity = "Columbus"
+    patientState = "OH"
+    patientZipCode = "43165"
+patient7_appointmentTime1 = time (date 2018 Jul 1) 10 0 0
+patient7_appointmentTime2 = time (date 2018 Jul 2) 10 0 0
+patient7_appointmentTime3 = time (date 2018 Jul 3) 10 0 0
+-- Patient8
+patient8_Name = "Bill Richards"
+patient8_InsuranceId = "ADT-34-3256"
+patient8_PolicyType = Gold
+patient8Demographics = PatientDemographics
+  with
+    patientGender = "Male"
+    patientSocialSecurityNumber = patient8_InsuranceId
+    patientDateOfBirth = "7/12/1980"
+    patientAddressLine1 = "4123 1st Ave."
+    patientAddressLine2 = ""
+    patientCity = "Columbus"
+    patientState = "OH"
+    patientZipCode = "43236"
+-- Patient9
+patient9_Name = "Lucy Wang"
+patient9_InsuranceId = "VDG-67-9807"
+patient9_PolicyType = Gold
+patient9Demographics = PatientDemographics
+  with
+    patientGender = "Female"
+    patientSocialSecurityNumber = patient9_InsuranceId
+    patientDateOfBirth = "2/15/1980"
+    patientAddressLine1 = "133 Mulberry Dr."
+    patientAddressLine2 = ""
+    patientCity = "Columbus"
+    patientState = "OH"
+    patientZipCode = "43006"
+-- Patient10
+patient10_Name = "George Jacobs"
+patient10_InsuranceId = "YGH-67-2323"
+patient10_PolicyType = Gold
+patient10Demographics = PatientDemographics
+  with
+    patientGender = "Male"
+    patientSocialSecurityNumber = patient10_InsuranceId
+    patientDateOfBirth = "3/17/1990"
+    patientAddressLine1 = "500 Pennsylvania Ave."
+    patientAddressLine2 = ""
+    patientCity = "Columbus"
+    patientState = "OH"
+    patientZipCode = "43084"
+
+feeSchedule : FeeSchedule
+feeSchedule = fromList [(X_Ray_Wrist_2_Views, 105.0),
+                        (X_Ray_Wrist_3_Views, 125.0),
+                        (Preventative_Care, 60.0),
+                        (Physicals, 55.0),
+                        (Sick_Visits, 40.0)]
+
+procedureCodeList = [X_Ray_Wrist_2_Views, X_Ray_Wrist_3_Views, Preventative_Care, Physicals, Sick_Visits]
+
+patientEncounter11 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient1"
+    encounterId = "4afc77be"
+    procedureCode = X_Ray_Wrist_3_Views
+    diagnosisCode = Fracture_of_scaphoid_bone_right_wrist_S62_001
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter12 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient1"
+    encounterId = "5afc77be"
+    procedureCode = Preventative_Care
+    diagnosisCode = Pain_in_right_arm_M79_601
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter13 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient1"
+    encounterId = "5afc78be"
+    procedureCode = Physicals
+    diagnosisCode = Pain_in_right_arm_M79_601
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter14 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient1"
+    encounterId = "4afc88be"
+    procedureCode = X_Ray_Wrist_2_Views
+    diagnosisCode = Open_fracture_of_scaphoid_bone_left_wrist_S62_002B
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter21 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient2"
+    encounterId = "23ad8148"
+    procedureCode = X_Ray_Wrist_2_Views
+    diagnosisCode = Open_fracture_of_scaphoid_bone_left_wrist_S62_002B
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter22 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient2"
+    encounterId = "33ad8148"
+    procedureCode = Physicals
+    diagnosisCode = Pain_in_left_arm_M79_602
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter23 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient2"
+    encounterId = "23ad9148"
+    procedureCode = X_Ray_Wrist_3_Views
+    diagnosisCode = Fracture_of_scaphoid_bone_right_wrist_S62_001
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter31 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient3"
+    encounterId = "23ad8149"
+    procedureCode = X_Ray_Wrist_3_Views
+    diagnosisCode = Fracture_of_scaphoid_bone_right_wrist_S62_001
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter32 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient3"
+    encounterId = "43ad8149"
+    procedureCode = Sick_Visits
+    diagnosisCode = Pain_in_arm_unspecified_M79_603
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter33 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient3"
+    encounterId = "23ad8249"
+    procedureCode = X_Ray_Wrist_2_Views
+    diagnosisCode = Open_fracture_of_scaphoid_bone_left_wrist_S62_002B
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter41 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient4"
+    encounterId = "23ad8150"
+    procedureCode = X_Ray_Wrist_2_Views
+    diagnosisCode = Open_fracture_of_scaphoid_bone_left_wrist_S62_002B
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter42 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient4"
+    encounterId = "53ad8150"
+    procedureCode = Preventative_Care
+    diagnosisCode = Pain_in_right_arm_M79_601
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter43 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient4"
+    encounterId = "23ad8160"
+    procedureCode = X_Ray_Wrist_3_Views
+    diagnosisCode = Fracture_of_scaphoid_bone_right_wrist_S62_001
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter51 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient5"
+    encounterId = "23ad8151"
+    procedureCode = X_Ray_Wrist_3_Views
+    diagnosisCode = Fracture_of_scaphoid_bone_right_wrist_S62_001
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter52 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient5"
+    encounterId = "34ad8148"
+    procedureCode = Physicals
+    diagnosisCode = Pain_in_left_arm_M79_602
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter53 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient5"
+    encounterId = "23ad9251"
+    procedureCode = X_Ray_Wrist_2_Views
+    diagnosisCode = Open_fracture_of_scaphoid_bone_left_wrist_S62_002B
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter61 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient6"
+    encounterId = "23ad8152"
+    procedureCode = X_Ray_Wrist_2_Views
+    diagnosisCode = Open_fracture_of_scaphoid_bone_left_wrist_S62_002B
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter62 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient6"
+    encounterId = "43ad8249"
+    procedureCode = Sick_Visits
+    diagnosisCode = Pain_in_arm_unspecified_M79_603
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter63 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient6"
+    encounterId = "23ad9262"
+    procedureCode = X_Ray_Wrist_3_Views
+    diagnosisCode = Fracture_of_scaphoid_bone_right_wrist_S62_001
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter71 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient7"
+    encounterId = "23ad9261"
+    procedureCode = X_Ray_Wrist_2_Views
+    diagnosisCode = Open_fracture_of_scaphoid_bone_left_wrist_S62_002B
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter72 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient7"
+    encounterId = "44ad8249"
+    procedureCode = Sick_Visits
+    diagnosisCode = Pain_in_arm_unspecified_M79_603
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"
+patientEncounter73 = EncounterDetails
+  with
+    patient = fromSome $ partyFromText "Patient7"
+    encounterId = "23ad9262"
+    procedureCode = X_Ray_Wrist_3_Views
+    diagnosisCode = Fracture_of_scaphoid_bone_right_wrist_S62_001
+    allowedAmount = None
+    coPay = None
+    patientResponsibility = None
+    siteServiceCode = "11"
+    appointmentPriority = "Elective"

@@ -1,0 +1,115 @@
+module Model.Main.Policy where
+
+import DA.List qualified as L
+import DA.Map qualified as M
+import Model.Main.Types
+import Model.Main.Procedure
+
+-- A contract between an insurance company and a patient
+template InsurancePolicy
+  with
+    operator : Party
+    payer : Party
+    patient : Party
+    patientName : Text
+    insuranceID: Text
+    policyType : PolicyType
+    annualDeductible : Decimal
+    currentDeductible : Decimal
+    procedureList : ProcedureMap
+    policyEndDate : Date
+    isPolicyInGoodStanding : Bool
+  where
+    signatory payer
+    observer patient
+
+    key (operator, payer, patient) : (Party, Party, Party)
+    maintainer key._2
+
+    choice LockProcedureOnAppointmentCreation : ContractId InsurancePolicy
+      with
+        procedureCode : ProcedureCode
+      controller payer  
+      do
+        let maybeProcedureCid = M.lookup procedureCode procedureList
+        case maybeProcedureCid of
+          Some procedureCid ->
+            do
+            newProcedureCid <- do exercise procedureCid Lock
+            let
+              newProcedureList = M.insert procedureCode newProcedureCid procedureList
+            create this with
+              procedureList = newProcedureList
+          None -> create this
+
+    choice UnlockProcedureOnAppointmentCancellation : ContractId InsurancePolicy
+      with
+        procedureCode : ProcedureCode
+      controller payer  
+      do
+        let maybeProcedureCid = M.lookup procedureCode procedureList
+        case maybeProcedureCid of
+          Some procedureCid ->
+            do
+            newProcedureCid <- exercise procedureCid Unlock
+            let
+              newProcedureList = M.insert procedureCode newProcedureCid procedureList
+            create this with
+              procedureList = newProcedureList
+          None -> create this
+
+    choice UpdatePolicyOnTreatmentCompletion : ContractId InsurancePolicy
+      with
+        patientResponsibility : Decimal
+        procedureCode : ProcedureCode
+      controller payer  
+      do
+        let maybeProcedureCid = M.lookup procedureCode procedureList
+        case maybeProcedureCid of
+          Some procedureCid ->
+            do
+            newProcedureCid <- exercise procedureCid UnlockAndIncrement
+            let
+              newProcedureList = M.insert procedureCode newProcedureCid procedureList
+            create this with
+              procedureList = newProcedureList
+              currentDeductible = max 0.0 (currentDeductible - patientResponsibility)
+          None -> create this
+
+    nonconsuming choice DisclosePolicy : ContractId DisclosedPolicy
+      with
+        receivers : [Party]
+      controller patient  
+      do
+        newProcedureMap <- discloseProcedureMap receivers procedureList
+        create DisclosedPolicy with procedureList = newProcedureMap, ..
+
+-- Policy details disclosed to a list of receivers
+template DisclosedPolicy
+  with
+    operator : Party
+    payer : Party
+    patient : Party
+    receivers : [Party]
+    patientName : Text
+    insuranceID: Text
+    policyType : PolicyType
+    annualDeductible : Decimal
+    currentDeductible : Decimal
+    procedureList : ProcedureMap
+    policyEndDate : Date
+    isPolicyInGoodStanding : Bool
+  where
+    signatory patient
+
+    observer receivers
+
+    choice Disclose : ContractId DisclosedPolicy
+      with
+        newReceiver : Party
+      controller (L.head receivers)  
+      do
+        newProcedureMap <- discloseProcedureMap [newReceiver] procedureList
+        create this with
+          receivers = newReceiver :: receivers
+          procedureList = newProcedureMap

@@ -1,0 +1,82 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+
+module Model.Main.CostCalculation where
+
+import Model.Main.Types
+import Model.Main.RuleTypes
+import Model.Main.Procedure(Procedure)
+
+import DA.Map qualified as M
+
+-- Encounter stage on which the cost calculation depends
+data EncounterStage = Referral|Appointment|Treatment deriving Eq
+
+calculateCosts : RuleParameters -> EncounterStage -> Update EncounterDetails
+calculateCosts ruleParams encounterStage =
+  do
+    policy <- fetch ruleParams.policy
+    networkContract <- fetch ruleParams.networkContract
+    let
+      encounterDetails = ruleParams.encounterDetails
+      procedureCode = encounterDetails.procedureCode
+      maybeProcedureCid = M.lookup procedureCode policy.procedureList
+      buildEncounterDetail allowedAmount patientResponsibility coPay = pure $ EncounterDetails with
+                        patient = policy.patient
+                        encounterId = encounterDetails.encounterId
+                        diagnosisCode = encounterDetails.diagnosisCode
+                        siteServiceCode = encounterDetails.siteServiceCode
+                        appointmentPriority = encounterDetails.appointmentPriority, ..
+      baseEncounterDetail = buildEncounterDetail None None None
+      optionalPatientResponsibilityAmount proc = calculatePatientResp policy.currentDeductible proc.copay -- <--  switched to calculatePatientResp'
+      getEncounterDetail procedure allowedAmount =
+         buildEncounterDetail (Some allowedAmount) (Some $ optionalPatientResponsibilityAmount procedure allowedAmount) (Some procedure.copay)
+
+      -- optionalPatientResponsibilityAmount = Some . calculatePatientResp policy.currentDeductible copayAmount
+      -- getEncounterDetail coPay allowedAmount = 
+      --  buildEncounterDetail (Some allowedAmount) (optionalPatientResponsibilityAmount allowedAmount) (Some copayAmount)
+
+    case (maybeProcedureCid, encounterStage) of
+      (Some procedureCid, Referral) ->
+          do
+            procedure <- fetch procedureCid
+            buildEncounterDetail None None (Some procedure.copay)
+
+      (Some procedureCid, _) ->
+          do
+            procedure <- fetch procedureCid
+            let
+              feeSchedule = networkContract.feeSchedule
+              maybeAmt = M.lookup procedureCode feeSchedule
+              copayAmount = procedure.copay
+            optional (buildEncounterDetail None None (Some procedure.copay)) (getEncounterDetail procedure) maybeAmt   
+
+      (None, _) -> baseEncounterDetail
+
+calculatePatientResp : Decimal -> Decimal -> Decimal -> Decimal
+calculatePatientResp deductible copay allowedAmount
+  | deductible >= allowedAmount
+    = copay + allowedAmount
+  | deductible > 0.0 && deductible < allowedAmount
+    = copay + deductible
+  | otherwise
+    = copay
+
+-- could be wrong way around 
+calculatePatientResp' : Decimal -> Decimal -> Procedure -> Decimal
+calculatePatientResp' deductible copay allowedAmount
+  | deductible >= allowedAmount.copay
+    = copay + allowedAmount.copay
+  | deductible > 0.0 && deductible < allowedAmount.copay
+    = copay + deductible
+  | otherwise
+    = copay
+
+
+calculatePayerPayment : Decimal -> Decimal -> Decimal
+calculatePayerPayment allowedAmount patientResp
+  =
+    max 0.0 (allowedAmount - patientResp)

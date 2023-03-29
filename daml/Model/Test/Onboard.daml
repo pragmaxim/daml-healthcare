@@ -1,0 +1,100 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+module Model.Test.Onboard where
+
+import Daml.Script
+import Model.Test.ReferenceData
+import Model.Main.Onboard
+import Model.Main.Payer
+import Model.Main.Provider qualified as P
+import Model.Main.Patient
+import Model.Main.NetworkContract qualified as NC
+
+data OnboardResult =
+  OnboardResult with
+    payerRole : ContractId Payer
+    provider1Role : ContractId P.Provider
+    provider2Role : ContractId P.Provider
+    patient1Role : ContractId Patient
+    provider1NetworkContract : ContractId NC.ProviderNetworkContract
+    provider2NetworkContract : ContractId NC.ProviderNetworkContract
+
+data Parties = Parties with
+  operator : Party
+  payer1 : Party
+  provider1 : Party
+  provider2 : Party
+  patient1 : Party
+
+allocateParties : Script Parties
+allocateParties = do
+    operator <- allocateParty "Operator"
+    payer1 <- allocateParty "Insurance Company"
+    provider1 <- allocateParty "PrimaryCareProvider"
+    provider2 <- allocateParty "Specialist"
+    patient1 <- allocateParty "John Doe"
+    pure Parties{..}
+
+onboard Parties{..} = script
+  do
+    entityMaster <- operator `submit` do
+      createCmd OnboardEntityMaster with ..
+
+    payerInvitation <- operator `submit` do
+      exerciseCmd entityMaster InvitePayer with
+        payer = payer1
+
+    payerRole <- payer1 `submit` do
+      exerciseCmd payerInvitation AcceptPayerInvitation with
+        payerName = payer1_payerName
+        demographics = payerDemographics
+
+    provider1Invitation <- operator `submit` do
+      exerciseCmd entityMaster InviteProvider with
+        provider = provider1
+
+    provider1Role <- provider1 `submit` do
+      exerciseCmd provider1Invitation P.AcceptProviderInvitation with
+        providerName = provider1_name
+        demographics = provider1Demographics
+
+    provider2Invitation <- operator `submit` do
+      exerciseCmd entityMaster InviteProvider with
+        provider = provider2
+
+    provider2Role <- provider2 `submit` do
+      exerciseCmd provider2Invitation P.AcceptProviderInvitation with
+        providerName = provider2_name
+        demographics = provider2Demographics
+
+    patient1Invitation <- operator `submit` do
+      exerciseCmd entityMaster InvitePatient with
+        patient = patient1
+
+    patient1Role <- patient1 `submit` do
+      exerciseCmd patient1Invitation AcceptPatientInvitation with
+        patientName = patient1_Name
+        demographics = patient1Demographics
+
+    --Provider 1 Network Contract Setup
+    provider1Request <- provider1 `submit` do
+      exerciseCmd provider1Role P.RequestNetworkContract with
+        payer = payer1
+
+    provider1NetworkContract <- payer1 `submit` do
+      exerciseCmd provider1Request P.AcceptNetworkContractRequest with
+        payerCid = payerRole, feeSchedule
+
+    --Provider 2 Network Contract Setup
+    provider2Request <- provider2 `submit` do
+      exerciseCmd provider2Role P.RequestNetworkContract with
+        payer = payer1
+
+    provider2NetworkContract <- payer1 `submit` do
+      exerciseCmd provider2Request P.AcceptNetworkContractRequest with
+        payerCid = payerRole, feeSchedule
+
+    return OnboardResult with ..

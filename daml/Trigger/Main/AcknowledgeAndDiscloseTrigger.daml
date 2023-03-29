@@ -1,0 +1,125 @@
+module Trigger.Main.AcknowledgeAndDiscloseTrigger where
+
+import Model.Test.ReferenceData
+import Model.Test.Referral
+import Daml.Trigger
+import DA.Foldable hiding (length)
+import DA.Optional
+import Daml.Trigger.Assert
+import DA.Assert
+import Model.Main.Policy
+import Model.Main.Provider
+import Trigger.Main.ContractUtils
+import DA.List.Total
+import DA.Either
+import Model.Test.Onboard
+import Trigger.Test.TriggerTestUtils
+import Daml.Script (Script, script, allocateParty)
+import qualified Daml.Script as Script
+
+acknowledgeAndDiscloseTrigger : Trigger ()
+acknowledgeAndDiscloseTrigger = Trigger
+  { initialize = pure ()
+  , updateState = \_ -> pure ()
+  , rule = acknowledgeAndDiscloseRule
+  , registeredTemplates = RegisteredTemplates [
+      registeredTemplate @DisclosureRule,
+      registeredTemplate @InsurancePolicy,
+      registeredTemplate @NotifyPatient
+    ]
+  , heartbeat = None
+  }
+
+acknowledgeAndDiscloseRule : Party -> TriggerA () ()
+acknowledgeAndDiscloseRule _party = do
+  insurancePolicies <- query @InsurancePolicy
+  notifyPatientContracts <- query @NotifyPatient
+  maybeDisclosureRules <- query @DisclosureRule
+  whenSome (head maybeDisclosureRules) $
+    \(_, disclosureRule) ->
+      forA_ notifyPatientContracts $ \(npCid, notifyPatient) -> do
+        let selectedPolicyOpt =
+              head $ filterContractIds
+                (\p -> p.patient == notifyPatient.patient)
+                insurancePolicies
+        whenSome selectedPolicyOpt $ \selectedPolicy ->
+          dedupExercise npCid $ AcknowledgeAndDisclose with
+            policyCid = selectedPolicy
+            receivers = disclosureRule.receivers
+
+-- Tests ---------------------------
+
+testNotificationAcknowledgedAndDisclosed: Script ()
+testNotificationAcknowledgedAndDisclosed = script do
+  parties@Parties{..} <- allocateParties
+  (updatedPolicy, notifyPatient, dRule) <- appointmentTest parties
+
+  let activeContracts =
+          toACS updatedPolicy <>
+          toACS notifyPatient <>
+          toACS dRule
+  commands <-
+    testTrigger acknowledgeAndDiscloseTrigger patient1 activeContracts
+
+  length commands === 1
+  assertExerciseCmd commands $ \(cid, choiceArg) -> do
+    assertEq cid notifyPatient
+    assertEq choiceArg $ AcknowledgeAndDisclose with
+        policyCid = updatedPolicy
+        receivers = [provider1, provider2]
+
+testNoNotificationAcknowledgedAndDisclosedWhenNoPolicy: Script ()
+testNoNotificationAcknowledgedAndDisclosedWhenNoPolicy = script do
+  parties@Parties{..} <- allocateParties
+  (_updatedPolicy, notifyPatient, dRule) <- appointmentTest parties
+
+  let activeContracts =
+          toACS notifyPatient <>
+          toACS dRule
+  commands <-
+    testTrigger acknowledgeAndDiscloseTrigger patient1 activeContracts
+
+  length commands === 0
+
+testNoNotification: Script ()
+testNoNotification = script do
+  patient1 <- allocateParty "John Doe"
+
+  dRule <- patient1 `submit`
+      Script.createCmd DisclosureRule with
+          operator = patient1
+          owner = patient1
+          receivers = []
+
+  let activeContracts = toACS dRule
+  commands <-
+    testTrigger acknowledgeAndDiscloseTrigger patient1 activeContracts
+
+  length commands === 0
+
+-- Utils
+
+appointmentTest parties@Parties{..} = script do
+  referralScenario <- referralTest parties
+
+  let provider2Role = referralScenario.provider2Role
+      appointmentDetails = referralScenario.ruleParameters
+      referralDetails = referralScenario.referralDetails
+      originalPolicy = referralScenario.originalPolicy
+      disclosureList = [provider1, provider2]
+
+  dRule <- patient1 `submit`
+      Script.createCmd DisclosureRule with
+          operator = operator
+          owner = patient1
+          receivers = disclosureList
+
+  scheduleResult <- provider2 `submit`
+    Script.exerciseCmd referralDetails ScheduleAppointment with
+      appointmentTime = patient1_appointmentTime
+  let appointmentCid = fromSome $ eitherToOptional scheduleResult
+
+  (updatePolicy, notifyPatient) <- payer1 `submit`
+    Script.exerciseCmd (snd appointmentCid) AcknowledgeAndLock with policyCid = originalPolicy
+
+  pure (updatePolicy, notifyPatient, dRule)

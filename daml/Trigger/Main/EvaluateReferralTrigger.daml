@@ -1,0 +1,30 @@
+module Trigger.Main.EvaluateReferralTrigger where
+
+import Daml.Trigger
+
+import Model.Main.Provider
+import Model.Main.NetworkContract
+import DA.List.Total (head)
+import DA.Foldable (forA_)
+import DA.Optional
+
+evaluateReferralTrigger : Trigger ()
+evaluateReferralTrigger = Trigger
+  { initialize = pure ()
+  , updateState = \_ -> pure ()
+  , rule = evaluateReferrals
+  , registeredTemplates = RegisteredTemplates [
+        registeredTemplate @ReferralRequest
+      , registeredTemplate @ProviderNetworkContract
+    ]
+  , heartbeat = None
+  }
+
+evaluateReferrals : Party -> TriggerA () ()
+evaluateReferrals party = do
+  requests <- query @ReferralRequest
+  networkContracts <- query @ProviderNetworkContract
+
+  whenSome (head networkContracts) $
+    \(networkContract, _) ->
+      forA_ requests $ \(cid, _) -> dedupExercise cid $ EvaluateReferral networkContract

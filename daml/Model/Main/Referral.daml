@@ -1,0 +1,30 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+
+module Model.Main.Referral where
+
+import Model.Main.Types
+
+-- A referral between the primary provider and the specialist
+template Referral
+  with
+    operator : Party
+    referringProvider : Party
+    renderingProvider : Party
+    encounterDetails : EncounterDetails
+  where
+    signatory renderingProvider
+
+-- The error state in case the referral request doesn't pass the rules check
+template FailedReferral
+  with
+    operator : Party
+    provider : Party
+    receiver: Party
+    patient: Party
+    reason : Text
+  where
+    signatory provider

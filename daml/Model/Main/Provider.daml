@@ -1,0 +1,260 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+module Model.Main.Provider where
+
+import Model.Main.Payer
+import Model.Main.Policy
+import Model.Main.Types
+import Model.Main.Referral
+import Model.Main.Appointment
+import Model.Main.NetworkContract
+import Model.Main.Rules
+import Model.Main.RuleTypes
+import Model.Main.CostCalculation qualified as CC
+
+-- Invitation from the operator that the provider can accept
+template ProviderInvitation
+  with
+    operator : Party
+    provider : Party
+  where
+
+    signatory operator
+    observer provider
+
+    choice AcceptProviderInvitation : ContractId Provider 
+      with
+        providerName : Text
+        demographics : ProviderDemographics
+      controller provider
+      do create Provider with ..
+
+-- Provider reference data and actions the provider can initiante in the workflow
+template Provider
+  with
+    operator : Party
+    provider : Party
+    providerName : Text
+    demographics : ProviderDemographics
+  where
+    signatory operator
+    signatory provider
+
+    nonconsuming choice RequestNetworkContract : ContractId ProviderRequestsPayer
+      with
+        payer : Party
+      controller provider  
+      do create ProviderRequestsPayer with ..
+
+    nonconsuming choice CreateReferral : ContractId ReferralRequest
+      with
+        receiver : Party
+        policy : ContractId DisclosedPolicy
+        encounterId : Text
+        procedureCode : ProcedureCode
+        diagnosisCode : DiagnosisCode
+        siteServiceCode : Text
+        appointmentPriority : Text
+      controller provider  
+      do
+        p <- fetch policy
+        disclosedPolicy <- exercise policy Disclose with newReceiver = receiver
+        let encounterDetails = EncounterDetails with
+              patient = p.patient
+              allowedAmount = None
+              coPay = None
+              patientResponsibility = None; ..
+        create ReferralRequest with
+          policy = disclosedPolicy, ..
+
+-- Provider's request to the insurance company to join its provider network
+template ProviderRequestsPayer
+  with
+    operator : Party
+    payer : Party
+    provider : Party
+    providerName : Text
+    demographics : ProviderDemographics
+  where
+
+    signatory provider
+    observer payer
+
+    choice AcceptNetworkContractRequest : ContractId ProviderNetworkContract
+      with
+        payerCid : ContractId Payer
+        feeSchedule : FeeSchedule
+      controller payer  
+      do
+        p <- fetch payerCid
+        assert (p.payer == payer)
+        create ProviderNetworkContract with
+          payerName = p.payerName, ..
+
+    choice RejectNetworkContractRequest : ContractId PayerRejectsNetworkContract
+      with
+        reason : Text
+      controller payer  
+      do create PayerRejectsNetworkContract with ..
+
+-- Request made by the primary provider which the specialist (receiver) can run checks against and create the actual Referral
+template ReferralRequest
+  with
+    operator : Party
+    provider : Party
+    receiver : Party
+    policy : ContractId DisclosedPolicy
+    encounterDetails : EncounterDetails
+  where
+
+    signatory provider
+    observer receiver
+
+    choice EvaluateReferral : Either (ContractId FailedReferral) (ContractId Referral, ContractId ReferralDetails)
+      with
+        networkContractCid : ContractId ProviderNetworkContract
+      controller receiver    
+      do
+        networkContract <- fetch networkContractCid
+        assert (networkContract.provider == receiver)
+        let ruleParameters = RuleParameters with
+              networkContract = networkContractCid
+              referral = None, ..
+        rulesCheck <- create RulesCheck with
+          requestingParty = receiver
+          ruleParams = ruleParameters
+        policy <- fetch ruleParameters.policy
+        rulesResult <- do exercise rulesCheck CheckEligibility
+        case rulesResult of
+          None ->
+            do
+              assert (elem provider policy.receivers == True)
+              newEncounterDetails <- (CC.calculateCosts ruleParameters CC.Referral)
+              refReq <- create Referral with
+                referringProvider = provider
+                renderingProvider = receiver
+                encounterDetails = newEncounterDetails, ..
+              refDet <- create ReferralDetails with
+                referringProvider = provider
+                renderingProvider = receiver
+                referralDetails = ruleParameters, ..
+              return (Right (refReq, refDet))
+          Some reason ->
+            do
+              failedRef <- create FailedReferral with
+                patient = policy.patient, ..
+              return (Left failedRef)
+
+-- Template to notify the patient and the insurance company once a specialist schedules an appointment
+template NotifyPayer
+  with
+    operator : Party
+    payer : Party
+    patient : Party
+    provider : Party
+    referralDetails : RuleParameters
+  where
+
+    signatory provider
+    observer payer
+
+    choice AcknowledgeAndLock : (ContractId InsurancePolicy, ContractId NotifyPatient)
+      with policyCid : ContractId InsurancePolicy
+      controller payer
+      do
+        policy <- do
+          exercise policyCid LockProcedureOnAppointmentCreation
+            with procedureCode = referralDetails.encounterDetails.procedureCode
+        notifyPatient <- create NotifyPatient with ..
+        return (policy, notifyPatient)
+
+template DisclosureRule
+  with
+    operator : Party
+    owner : Party
+    receivers : [Party]
+  where
+    signatory owner
+
+template NotifyPatient
+  with
+    operator : Party
+    payer : Party
+    patient : Party
+    provider : Party
+  where
+
+    signatory provider
+    observer patient
+
+    choice AcknowledgeAndDisclose : ContractId DisclosedPolicy
+      with
+        policyCid : ContractId InsurancePolicy
+        receivers : [Party]
+      controller patient  
+      do exercise policyCid DisclosePolicy {receivers}
+
+-- Parameters of a referral
+template ReferralDetails
+  with
+    operator : Party
+    referringProvider : Party
+    renderingProvider : Party
+    referralDetails : RuleParameters
+  where
+    signatory referringProvider
+    observer renderingProvider
+
+    choice UpdateReferralDetails : ContractId ReferralDetails
+      with
+        referralCid : ContractId Referral
+      controller renderingProvider  
+      do
+        let newReferralDetails = updateReferralParam referralDetails referralCid
+        create this with referralDetails = newReferralDetails
+
+    nonconsuming choice ScheduleAppointment : Either (ContractId FailedSchedulingAppointment) (ContractId Appointment, ContractId NotifyPayer)
+      with
+        appointmentTime : Time
+      controller renderingProvider  
+      do
+        rulesCheck <- create RulesCheck with
+          requestingParty = renderingProvider
+          ruleParams = referralDetails
+        rulesResult <- do exercise rulesCheck CheckPreAuthorization
+        p <- fetch referralDetails.policy
+        let patient = p.patient
+            payer = p.payer
+        case rulesResult of
+          None ->
+            do
+              assert (elem renderingProvider p.receivers == True)
+              newEncounterDetails <- (CC.calculateCosts referralDetails CC.Appointment)
+              let appointmentDetails = updateEncounterParam referralDetails newEncounterDetails
+              apptReq <- create Appointment with
+                policy = referralDetails.policy
+                encounterDetails = appointmentDetails
+                provider = renderingProvider, ..
+              notifyCid <- create NotifyPayer with
+                referralDetails = referralDetails
+                provider = renderingProvider, ..
+              return $ Right (apptReq, notifyCid)
+          Some reason ->
+            do
+              failed <- create FailedSchedulingAppointment with
+                provider = renderingProvider, ..
+              return $ Left failed
+
+-- The error state in case the appointment scheduling doesn't pass the rules check
+template FailedSchedulingAppointment
+  with
+    operator : Party
+    provider : Party
+    patient: Party
+    appointmentTime: Time
+    reason : Text
+  where
+    signatory provider

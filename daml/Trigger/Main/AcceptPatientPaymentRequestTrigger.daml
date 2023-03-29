@@ -1,0 +1,55 @@
+module Trigger.Main.AcceptPatientPaymentRequestTrigger where
+
+import Model.Main.Claim
+import Daml.Script (Script, script)
+import Daml.Trigger
+import DA.Foldable hiding (length)
+import Daml.Trigger.Assert
+import DA.Assert
+import Model.Demo.Treatment
+import Model.Demo.ReferenceData
+import Trigger.Test.TriggerTestUtils
+
+acceptPatientPaymentRequestTrigger : Trigger ()
+acceptPatientPaymentRequestTrigger = Trigger
+  { initialize = pure ()
+  , updateState = \_ -> pure ()
+  , rule = acceptPatientPaymentRequestRule
+  , registeredTemplates = RegisteredTemplates [
+      registeredTemplate @PatientPaymentRequest
+    ]
+  , heartbeat = None
+  }
+
+acceptPatientPaymentRequestRule : Party -> TriggerA () ()
+acceptPatientPaymentRequestRule _party = do
+  claimRequests <- query @PatientPaymentRequest
+  forA_ claimRequests $ \(patientPaymentRequestCid, _patientPaymentRequest) ->
+    dedupExercise patientPaymentRequestCid AcceptPatientObligation
+
+-- Tests ---------------------------
+
+testPatientPaymentRequestAccepted: Script ()
+testPatientPaymentRequestAccepted = script do
+  parties@Parties{..} <- allocateParties
+  treatmentScenario <- treatmentTest parties
+
+  let activeContracts =
+          toACS treatmentScenario.paymentReq11.patientReq
+  commands <-
+    testTrigger acceptPatientPaymentRequestTrigger patient1 activeContracts
+
+  length commands === 1
+  assertExerciseCmd commands $ \(cid, choiceArg) -> do
+    assertEq cid treatmentScenario.paymentReq11.patientReq
+    assertEq choiceArg AcceptPatientObligation
+
+testNoPatientPaymentRequest: Script ()
+testNoPatientPaymentRequest = script do
+  Parties{patient1} <- allocateParties
+
+  let activeContracts = mempty
+  commands <-
+    testTrigger acceptPatientPaymentRequestTrigger patient1 activeContracts
+
+  length commands === 0

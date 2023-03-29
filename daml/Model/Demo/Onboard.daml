@@ -1,0 +1,129 @@
+module Model.Demo.Onboard where
+
+import Model.Main.Onboard
+import Model.Main.Payer
+import Model.Main.Provider
+import Model.Main.Patient
+import Model.Main.Types
+import Model.Demo.ReferenceData
+import Daml.Script
+
+providerInvitation : Party -> Party -> ContractId OnboardEntityMaster -> Script (ContractId ProviderInvitation)
+providerInvitation operator provider entityMaster = do
+  operator `submit` do exerciseCmd entityMaster InviteProvider with provider = provider
+
+providerRole : Party -> ContractId ProviderInvitation -> Text -> ProviderDemographics -> Script (ContractId Provider)
+providerRole provider providerInvitation providerName demographics = do
+  provider `submit` do
+    exerciseCmd providerInvitation AcceptProviderInvitation with
+      providerName
+      demographics
+
+patientInvitation : Party -> Party -> ContractId OnboardEntityMaster -> Script (ContractId PatientInvitation)
+patientInvitation operator patient entityMaster = do
+  operator `submit` do exerciseCmd entityMaster InvitePatient with patient = patient
+
+patientRole : Party -> Text -> PatientDemographics -> ContractId PatientInvitation -> Script (ContractId Patient)
+patientRole patient patientName patientDemographics patientInvitation =
+  patient `submit` do
+    exerciseCmd patientInvitation AcceptPatientInvitation with
+      patientName = patientName
+      demographics = patientDemographics
+
+data OnboardData = OnboardData
+  with
+    payerRole: ContractId Payer
+    provider1Role: ContractId Provider
+    provider2Role: ContractId Provider
+    patient1Role: ContractId Patient
+    patient2Role: ContractId Patient
+    patient3Role: ContractId Patient
+    patient4Role: ContractId Patient
+    patient5Role: ContractId Patient
+    patient6Role: ContractId Patient
+    patient7Role: ContractId Patient
+    patient8Role: ContractId Patient
+    patient9Role: ContractId Patient
+    patient10Role: ContractId Patient
+  deriving (Eq, Show)
+
+-- standalone version to view it in DAML Studio
+onboard' = onboard =<< allocateParties
+
+onboard parties@Parties{..} = script
+  do
+
+
+    entityMaster <- operator `submit` do
+      createCmd OnboardEntityMaster with
+        operator
+
+    payerInvitation <- operator `submit` do
+      exerciseCmd entityMaster InvitePayer with
+        payer = payer1
+    payerRole <- payer1 `submit` do
+      exerciseCmd payerInvitation AcceptPayerInvitation with
+        payerName = payer1_payerName
+        demographics = payer1Demographics
+
+    provider1Invitation <- providerInvitation operator provider1 entityMaster
+    provider1Role <- providerRole provider1 provider1Invitation provider1_name provider1Demographics
+
+    provider2Invitation <- providerInvitation operator provider2 entityMaster
+    provider2Role <- providerRole provider2 provider2Invitation provider2_name provider2Demographics
+
+    patient1Invitation <- patientInvitation operator patient1 entityMaster
+    patient1Role <-
+      patientRole patient1 patient1_Name patient1Demographics patient1Invitation
+
+    patient2Invitation <- patientInvitation operator patient2 entityMaster
+    patient2Role <-
+      patientRole patient2 patient2_Name patient2Demographics patient2Invitation
+
+    patient3Invitation <- patientInvitation operator patient3 entityMaster
+    patient3Role <-
+      patientRole patient3 patient3_Name patient3Demographics patient3Invitation
+
+    patient4Invitation <- patientInvitation operator patient4 entityMaster
+    patient4Role <-
+      patientRole patient4 patient4_Name patient4Demographics patient4Invitation
+
+    patient5Invitation <- patientInvitation operator patient5 entityMaster
+    patient5Role <-
+      patientRole patient5 patient5_Name patient5Demographics patient5Invitation
+
+    patient6Invitation <- patientInvitation operator patient6 entityMaster
+    patient6Role <-
+      patientRole patient6 patient6_Name patient6Demographics patient6Invitation
+
+    patient7Invitation <- patientInvitation operator patient7 entityMaster
+    patient7Role <-
+      patientRole patient7 patient7_Name patient7Demographics patient7Invitation
+
+    patient8Invitation <- patientInvitation operator patient8 entityMaster
+    patient8Role <-
+      patientRole patient8 patient8_Name patient8Demographics patient8Invitation
+
+    patient9Invitation <- patientInvitation operator patient9 entityMaster
+    patient9Role <-
+      patientRole patient9 patient9_Name patient9Demographics patient9Invitation
+
+    patient10Invitation <- patientInvitation operator patient10 entityMaster
+    patient10Role <-
+      patientRole patient10 patient10_Name patient10Demographics patient10Invitation
+
+    return OnboardData with
+        payerRole
+        provider1Role
+        provider2Role
+        patient1Role
+        patient2Role
+        patient3Role
+        patient4Role
+        patient5Role
+        patient6Role
+        patient7Role
+        patient8Role
+        patient9Role
+        patient10Role
+

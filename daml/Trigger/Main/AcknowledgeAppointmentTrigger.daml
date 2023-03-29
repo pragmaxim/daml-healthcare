@@ -1,0 +1,41 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+
+
+module Trigger.Main.AcknowledgeAppointmentTrigger where
+
+import Daml.Trigger
+
+import Model.Main.Provider
+import Model.Main.Policy
+import DA.Foldable (forA_)
+
+acknowledgeAppointmentTrigger : Trigger ()
+acknowledgeAppointmentTrigger = Trigger
+  { initialize = pure ()
+  , updateState = \_ -> pure ()
+  , rule = acknowledgeAppointments
+  , registeredTemplates = RegisteredTemplates [
+        registeredTemplate @NotifyPayer
+      , registeredTemplate @InsurancePolicy
+    ]
+  , heartbeat = None
+  }
+
+acknowledgeAppointments : Party -> TriggerA () ()
+acknowledgeAppointments party = do
+  notifications <- query @NotifyPayer
+  policies <- query @InsurancePolicy
+
+  forA_
+    [ (notification, find (byPatient notification) policies) | notification <- notifications]
+    acknowledgeAndLock
+  where
+    acknowledgeAndLock (notification, Some policy) =
+      fst notification `dedupExercise` AcknowledgeAndLock (fst policy)
+    acknowledgeAndLock _ = pure ()
+
+    byPatient (_, notification) (_, policy) = notification.patient == policy.patient

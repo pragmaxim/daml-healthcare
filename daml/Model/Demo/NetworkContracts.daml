@@ -1,0 +1,51 @@
+module Model.Demo.NetworkContracts where
+
+import Daml.Script
+import Model.Main.Provider
+import Model.Main.Payer
+import Model.Main.NetworkContract
+import Model.Demo.Onboard qualified as O
+import Model.Demo.ReferenceData qualified as Ref
+
+
+requestNetworkContract
+    (payer1 : Party)
+    (provider: Party)
+    (providerRole: ContractId Provider)
+    : Script (ContractId ProviderRequestsPayer) = do
+  provider `submit` do
+    exerciseCmd providerRole RequestNetworkContract with payer = payer1
+
+acceptNetworkContractRequest
+    (payer1 : Party)
+    (payerRole: ContractId Payer)
+    (providerRequest: ContractId ProviderRequestsPayer)
+    : Script (ContractId ProviderNetworkContract)= do
+  payer1 `submit` do
+    exerciseCmd providerRequest AcceptNetworkContractRequest with
+      payerCid = payerRole
+      feeSchedule = Ref.feeSchedule
+
+data NetworkContractSet = NetworkContractSet
+  with
+    onboard: O.OnboardData
+    provider1NetworkContract: ContractId ProviderNetworkContract
+    provider2NetworkContract: ContractId ProviderNetworkContract
+  deriving (Eq, Show)
+
+-- standalone version to view it in DAML Studio
+networkContractsSet' = networkContractsSet =<< Ref.allocateParties
+
+networkContractsSet parties@Ref.Parties{..} = script
+  do
+    onb <- O.onboard parties
+
+    provider1Request <- requestNetworkContract payer1 provider1 onb.provider1Role
+    provider1NetworkContract <-
+      acceptNetworkContractRequest payer1 onb.payerRole provider1Request
+
+    provider2Request <- requestNetworkContract payer1 provider2 onb.provider2Role
+    provider2NetworkContract <-
+      acceptNetworkContractRequest payer1 onb.payerRole provider2Request
+
+    return $ NetworkContractSet onb provider1NetworkContract provider2NetworkContract

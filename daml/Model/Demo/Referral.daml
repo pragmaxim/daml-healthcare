@@ -1,0 +1,382 @@
+module Model.Demo.Referral where
+
+import Daml.Script
+import Model.Demo.InsurancePolicies
+import Model.Demo.ReferenceData
+import Model.Main.Provider
+import Model.Main.Policy
+import Model.Main.Referral
+import Model.Main.RuleTypes
+import Model.Main.NetworkContract
+
+data ReferralData = ReferralData
+  with
+    insurancePolicies: InsurancePoliciesData
+    patient1: PatientReferralData4
+    patient2: PatientReferralData3
+    patient3: PatientReferralData3
+    patient4: PatientReferralData3
+    patient5: PatientReferralData3
+    patient6: PatientReferralData3
+    patient7: PatientReferralData3
+  deriving (Eq, Show)
+
+data PatientReferralData4 = PatientReferralData4
+  with
+    ruleParams1: RuleParameters
+    referralDetails1: ContractId ReferralDetails
+    ruleParams2: RuleParameters
+    referralDetails2: ContractId ReferralDetails
+    ruleParams3: RuleParameters
+    referralDetails3: ContractId ReferralDetails
+    ruleParams4: RuleParameters
+    referralDetails4: ContractId ReferralDetails
+  deriving (Eq, Show)
+
+data PatientReferralData3 = PatientReferralData3
+  with
+    ruleParams1: RuleParameters
+    referralDetails1: ContractId ReferralDetails
+    ruleParams2: RuleParameters
+    referralDetails2: ContractId ReferralDetails
+    ruleParams3: RuleParameters
+    referralDetails3: ContractId ReferralDetails
+  deriving (Eq, Show)
+
+processReferral : Party -> ContractId Provider -> Party -> RuleParameters -> ContractId ProviderNetworkContract -> Script (ContractId Referral, ContractId ReferralDetails)
+processReferral provider providerRole receiver ruleParams providerNetworkContract = do
+  referralRequest <- provider `submit` do
+    exerciseCmd providerRole CreateReferral with
+      receiver = receiver
+      policy = ruleParams.policy
+      encounterId = ruleParams.encounterDetails.encounterId
+      procedureCode = ruleParams.encounterDetails.procedureCode
+      diagnosisCode = ruleParams.encounterDetails.diagnosisCode
+      siteServiceCode = ruleParams.encounterDetails.siteServiceCode
+      appointmentPriority = ruleParams.encounterDetails.appointmentPriority
+
+  errOrResult <- receiver `submit` do
+      exerciseCmd referralRequest EvaluateReferral with networkContractCid = providerNetworkContract
+
+  case errOrResult of
+    Left failedReferralCid ->  do
+      Some failedRef <- queryContractId receiver failedReferralCid
+      abort failedRef.reason
+    Right res -> return res
+
+updateRefDetails : Party -> (ContractId Referral, ContractId ReferralDetails) -> Script (ContractId ReferralDetails, ContractId DisclosedPolicy)
+updateRefDetails provider (referralCid, referralDetailsCid) = do
+  refDetailsCid <- provider `submit` do exerciseCmd referralDetailsCid UpdateReferralDetails with referralCid = referralCid
+  Some refDetails <- queryContractId provider refDetailsCid
+
+  return (refDetailsCid, refDetails.referralDetails.policy)
+
+-- standalone version to view it in DAML Studio
+referral' = referralSet =<< allocateParties
+referralSet parties@Parties{..} = script
+  do
+    ip <- insurancePoliciesSet parties
+    let
+      provider1Role = ip.networkContracts.onboard.provider1Role
+      provider2Role = ip.networkContracts.onboard.provider2Role
+      provider1NetworkContract = ip.networkContracts.provider1NetworkContract
+      provider2NetworkContract = ip.networkContracts.provider2NetworkContract
+
+      ruleParams11 =
+        RuleParameters with
+          policy = ip.patient1.disclosedPolicyCid1
+          encounterDetails = patientEncounter11
+          networkContract = provider2NetworkContract
+          referral = None
+      ruleParams12 =
+        RuleParameters with
+          policy = ip.patient1.disclosedPolicyCid2
+          encounterDetails = patientEncounter12
+          networkContract = provider1NetworkContract
+          referral = None
+      ruleParams13 =
+        RuleParameters with
+          policy = ip.patient1.disclosedPolicyCid3
+          encounterDetails = patientEncounter13
+          networkContract = provider1NetworkContract
+          referral = None
+      ruleParams14 =
+        RuleParameters with
+          policy = ip.patient1.disclosedPolicyCid4
+          encounterDetails = patientEncounter14
+          networkContract = provider2NetworkContract
+          referral = None
+      ruleParams21 =
+        RuleParameters with
+          policy = ip.patient2.disclosedPolicyCid1
+          encounterDetails = patientEncounter21
+          networkContract = provider2NetworkContract
+          referral = None
+      ruleParams22 =
+        RuleParameters with
+          policy = ip.patient2.disclosedPolicyCid2
+          encounterDetails = patientEncounter22
+          networkContract = provider1NetworkContract
+          referral = None
+      ruleParams23 =
+        RuleParameters with
+          policy = ip.patient2.disclosedPolicyCid3
+          encounterDetails = patientEncounter23
+          networkContract = provider2NetworkContract
+          referral = None
+      ruleParams31 =
+        RuleParameters with
+          policy = ip.patient3.disclosedPolicyCid1
+          encounterDetails = patientEncounter31
+          networkContract = provider2NetworkContract
+          referral = None
+      ruleParams32 =
+        RuleParameters with
+          policy = ip.patient3.disclosedPolicyCid2
+          encounterDetails = patientEncounter32
+          networkContract = provider1NetworkContract
+          referral = None
+      ruleParams33 =
+        RuleParameters with
+          policy = ip.patient3.disclosedPolicyCid3
+          encounterDetails = patientEncounter33
+          networkContract = provider2NetworkContract
+          referral = None
+      ruleParams41 =
+        RuleParameters with
+          policy = ip.patient4.disclosedPolicyCid1
+          encounterDetails = patientEncounter41
+          networkContract = provider2NetworkContract
+          referral = None
+      ruleParams42 =
+        RuleParameters with
+          policy = ip.patient4.disclosedPolicyCid2
+          encounterDetails = patientEncounter42
+          networkContract = provider1NetworkContract
+          referral = None
+      ruleParams43 =
+        RuleParameters with
+          policy = ip.patient4.disclosedPolicyCid3
+          encounterDetails = patientEncounter43
+          networkContract = provider2NetworkContract
+          referral = None
+      ruleParams51 =
+        RuleParameters with
+          policy = ip.patient5.disclosedPolicyCid1
+          encounterDetails = patientEncounter51
+          networkContract = provider2NetworkContract
+          referral = None
+      ruleParams52 =
+        RuleParameters with
+          policy = ip.patient5.disclosedPolicyCid2
+          encounterDetails = patientEncounter52
+          networkContract = provider1NetworkContract
+          referral = None
+      ruleParams53 =
+        RuleParameters with
+          policy = ip.patient5.disclosedPolicyCid3
+          encounterDetails = patientEncounter53
+          networkContract = provider2NetworkContract
+          referral = None
+      ruleParams61 =
+        RuleParameters with
+          policy = ip.patient6.disclosedPolicyCid1
+          encounterDetails = patientEncounter61
+          networkContract = provider2NetworkContract
+          referral = None
+      ruleParams62 =
+        RuleParameters with
+          policy = ip.patient6.disclosedPolicyCid2
+          encounterDetails = patientEncounter62
+          networkContract = provider1NetworkContract
+          referral = None
+      ruleParams63 =
+        RuleParameters with
+          policy = ip.patient6.disclosedPolicyCid3
+          encounterDetails = patientEncounter63
+          networkContract = provider2NetworkContract
+          referral = None
+      ruleParams71 =
+        RuleParameters with
+          policy = ip.patient7.disclosedPolicyCid1
+          encounterDetails = patientEncounter71
+          networkContract = provider2NetworkContract
+          referral = None
+      ruleParams72 =
+        RuleParameters with
+          policy = ip.patient7.disclosedPolicyCid2
+          encounterDetails = patientEncounter72
+          networkContract = provider1NetworkContract
+          referral = None
+      ruleParams73 =
+        RuleParameters with
+          policy = ip.patient7.disclosedPolicyCid3
+          encounterDetails = patientEncounter73
+          networkContract = provider2NetworkContract
+          referral = None
+
+    -- (referralCid, referralDetailsCid)
+    r11 <- processReferral provider2 provider2Role provider2 ruleParams11 provider2NetworkContract
+    r12 <- processReferral provider1 provider1Role provider1 ruleParams12 provider1NetworkContract
+    r13 <- processReferral provider1 provider1Role provider1 ruleParams13 provider1NetworkContract
+    r14 <- processReferral provider2 provider2Role provider2 ruleParams14 provider2NetworkContract
+
+    r21 <- processReferral provider2 provider2Role provider2 ruleParams21 provider2NetworkContract
+    r22 <- processReferral provider1 provider1Role provider1 ruleParams22 provider1NetworkContract
+    r23 <- processReferral provider2 provider2Role provider2 ruleParams23 provider2NetworkContract
+
+    r31 <- processReferral provider2 provider2Role provider2 ruleParams31 provider2NetworkContract
+    r32 <- processReferral provider1 provider1Role provider1 ruleParams32 provider1NetworkContract
+    r33 <- processReferral provider2 provider2Role provider2 ruleParams33 provider2NetworkContract
+
+    r41 <- processReferral provider2 provider2Role provider2 ruleParams41 provider2NetworkContract
+    r42 <- processReferral provider1 provider1Role provider1 ruleParams42 provider1NetworkContract
+    r43 <- processReferral provider2 provider2Role provider2 ruleParams43 provider2NetworkContract
+
+    r51 <- processReferral provider2 provider2Role provider2 ruleParams51 provider2NetworkContract
+    r52 <- processReferral provider1 provider1Role provider1 ruleParams52 provider1NetworkContract
+    r53 <- processReferral provider2 provider2Role provider2 ruleParams53 provider2NetworkContract
+
+    r61 <- processReferral provider2 provider2Role provider2 ruleParams61 provider2NetworkContract
+    r62 <- processReferral provider1 provider1Role provider1 ruleParams62 provider1NetworkContract
+    r63 <- processReferral provider2 provider2Role provider2 ruleParams63 provider2NetworkContract
+
+    r71 <- processReferral provider2 provider2Role provider2 ruleParams71 provider2NetworkContract
+    r72 <- processReferral provider1 provider1Role provider1 ruleParams72 provider1NetworkContract
+    r73 <- processReferral provider2 provider2Role provider2 ruleParams73 provider2NetworkContract
+
+    (updatedRefDetails11, updatedDisclosedPolicy11) <- updateRefDetails provider2 r11
+    (updatedRefDetails12, updatedDisclosedPolicy12) <- updateRefDetails provider1 r12
+    (updatedRefDetails13, updatedDisclosedPolicy13) <- updateRefDetails provider1 r13
+    (updatedRefDetails14, updatedDisclosedPolicy14) <- updateRefDetails provider2 r14
+
+    (updatedRefDetails21, updatedDisclosedPolicy21) <- updateRefDetails provider2 r21
+    (updatedRefDetails22, updatedDisclosedPolicy22) <- updateRefDetails provider1 r22
+    (updatedRefDetails23, updatedDisclosedPolicy23) <- updateRefDetails provider2 r23
+
+    (updatedRefDetails31, updatedDisclosedPolicy31) <- updateRefDetails provider2 r31
+    (updatedRefDetails32, updatedDisclosedPolicy32) <- updateRefDetails provider1 r32
+    (updatedRefDetails33, updatedDisclosedPolicy33) <- updateRefDetails provider2 r33
+
+    (updatedRefDetails41, updatedDisclosedPolicy41) <- updateRefDetails provider2 r41
+    (updatedRefDetails42, updatedDisclosedPolicy42) <- updateRefDetails provider1 r42
+    (updatedRefDetails43, updatedDisclosedPolicy43) <- updateRefDetails provider2 r43
+
+    (updatedRefDetails51, updatedDisclosedPolicy51) <- updateRefDetails provider2 r51
+    (updatedRefDetails52, updatedDisclosedPolicy52) <- updateRefDetails provider1 r52
+    (updatedRefDetails53, updatedDisclosedPolicy53) <- updateRefDetails provider2 r53
+
+    (updatedRefDetails61, updatedDisclosedPolicy61) <- updateRefDetails provider2 r61
+    (updatedRefDetails62, updatedDisclosedPolicy62) <- updateRefDetails provider1 r62
+    (updatedRefDetails63, updatedDisclosedPolicy63) <- updateRefDetails provider2 r63
+
+    (updatedRefDetails71, updatedDisclosedPolicy71) <- updateRefDetails provider2 r71
+    (updatedRefDetails72, updatedDisclosedPolicy72) <- updateRefDetails provider1 r72
+    (updatedRefDetails73, updatedDisclosedPolicy73) <- updateRefDetails provider2 r73
+    let
+      updatedRuleParams11 = ruleParams11 with
+        referral = (Some $ fst r11)
+        policy = updatedDisclosedPolicy11
+
+      updatedRuleParams12 = ruleParams12 with
+        referral = (Some $ fst r12)
+        policy = updatedDisclosedPolicy12
+
+      updatedRuleParams13 = ruleParams13 with
+         referral = (Some $ fst r13)
+         policy = updatedDisclosedPolicy13
+      updatedRuleParams14 = ruleParams14 with
+         referral = (Some $ fst r14)
+         policy = updatedDisclosedPolicy14
+
+      updatedRuleParams21 = ruleParams21 with
+         referral = (Some $ fst r21)
+         policy = updatedDisclosedPolicy21
+      updatedRuleParams22 = ruleParams22 with
+         referral = (Some $ fst r22)
+         policy = updatedDisclosedPolicy22
+      updatedRuleParams23 = ruleParams23 with
+         referral = (Some $ fst r23)
+         policy = updatedDisclosedPolicy23
+
+      updatedRuleParams31 = ruleParams31 with
+         referral = (Some $ fst r31)
+         policy = updatedDisclosedPolicy31
+      updatedRuleParams32 = ruleParams32 with
+         referral = (Some $ fst r32)
+         policy = updatedDisclosedPolicy32
+      updatedRuleParams33 = ruleParams33 with
+         referral = (Some $ fst r33)
+         policy = updatedDisclosedPolicy33
+
+      updatedRuleParams41 = ruleParams41 with
+         referral = (Some $ fst r41)
+         policy = updatedDisclosedPolicy41
+      updatedRuleParams42 = ruleParams42 with
+         referral = (Some $ fst r42)
+         policy = updatedDisclosedPolicy42
+      updatedRuleParams43 = ruleParams43 with
+         referral = (Some $ fst r43)
+         policy = updatedDisclosedPolicy43
+
+      updatedRuleParams51 = ruleParams51 with
+         referral = (Some $ fst r51)
+         policy = updatedDisclosedPolicy51
+      updatedRuleParams52 = ruleParams52 with
+         referral = (Some $ fst r52)
+         policy = updatedDisclosedPolicy52
+      updatedRuleParams53 = ruleParams53 with
+         referral = (Some $ fst r53)
+         policy = updatedDisclosedPolicy53
+
+      updatedRuleParams61 = ruleParams61 with
+         referral = (Some $ fst r61)
+         policy = updatedDisclosedPolicy61
+      updatedRuleParams62 = ruleParams62 with
+         referral = (Some $ fst r62)
+         policy = updatedDisclosedPolicy62
+      updatedRuleParams63 = ruleParams63 with
+         referral = (Some $ fst r63)
+         policy = updatedDisclosedPolicy63
+
+      updatedRuleParams71 = ruleParams71 with
+         referral = (Some $ fst r71)
+         policy = updatedDisclosedPolicy71
+      updatedRuleParams72 = ruleParams72 with
+         referral = (Some $ fst r72)
+         policy = updatedDisclosedPolicy72
+      updatedRuleParams73 = ruleParams73 with
+         referral = (Some $ fst r73)
+         policy = updatedDisclosedPolicy73
+
+    return ReferralData with
+      insurancePolicies = ip with
+        patient1 = ip.patient1 with disclosedPolicyCid1 = updatedDisclosedPolicy11
+        patient1 = ip.patient1 with disclosedPolicyCid2 = updatedDisclosedPolicy12
+        patient1 = ip.patient1 with disclosedPolicyCid3 = updatedDisclosedPolicy13
+        patient1 = ip.patient1 with disclosedPolicyCid4 = updatedDisclosedPolicy14
+        patient2 = ip.patient2 with disclosedPolicyCid1 = updatedDisclosedPolicy21
+        patient2 = ip.patient2 with disclosedPolicyCid2 = updatedDisclosedPolicy22
+        patient2 = ip.patient2 with disclosedPolicyCid3 = updatedDisclosedPolicy23
+        patient3 = ip.patient3 with disclosedPolicyCid1 = updatedDisclosedPolicy31
+        patient3 = ip.patient3 with disclosedPolicyCid2 = updatedDisclosedPolicy32
+        patient3 = ip.patient3 with disclosedPolicyCid3 = updatedDisclosedPolicy33
+        patient4 = ip.patient4 with disclosedPolicyCid1 = updatedDisclosedPolicy41
+        patient4 = ip.patient4 with disclosedPolicyCid2 = updatedDisclosedPolicy42
+        patient4 = ip.patient4 with disclosedPolicyCid3 = updatedDisclosedPolicy43
+        patient5 = ip.patient5 with disclosedPolicyCid1 = updatedDisclosedPolicy51
+        patient5 = ip.patient5 with disclosedPolicyCid2 = updatedDisclosedPolicy52
+        patient5 = ip.patient5 with disclosedPolicyCid3 = updatedDisclosedPolicy53
+        patient6 = ip.patient6 with disclosedPolicyCid1 = updatedDisclosedPolicy61
+        patient6 = ip.patient6 with disclosedPolicyCid2 = updatedDisclosedPolicy62
+        patient6 = ip.patient6 with disclosedPolicyCid3 = updatedDisclosedPolicy63
+        patient7 = ip.patient7 with disclosedPolicyCid1 = updatedDisclosedPolicy71
+        patient7 = ip.patient7 with disclosedPolicyCid2 = updatedDisclosedPolicy72
+        patient7 = ip.patient7 with disclosedPolicyCid3 = updatedDisclosedPolicy73
+      patient1 = PatientReferralData4 updatedRuleParams11 updatedRefDetails11 updatedRuleParams12 updatedRefDetails12 updatedRuleParams13 updatedRefDetails13 updatedRuleParams14 updatedRefDetails14
+      patient2 = PatientReferralData3 updatedRuleParams21 updatedRefDetails21 updatedRuleParams22 updatedRefDetails22 updatedRuleParams23 updatedRefDetails23
+      patient3 = PatientReferralData3 updatedRuleParams31 updatedRefDetails31 updatedRuleParams32 updatedRefDetails32 updatedRuleParams33 updatedRefDetails33
+      patient4 = PatientReferralData3 updatedRuleParams41 updatedRefDetails41 updatedRuleParams42 updatedRefDetails42 updatedRuleParams43 updatedRefDetails43
+      patient5 = PatientReferralData3 updatedRuleParams51 updatedRefDetails51 updatedRuleParams52 updatedRefDetails52 updatedRuleParams53 updatedRefDetails53
+      patient6 = PatientReferralData3 updatedRuleParams61 updatedRefDetails61 updatedRuleParams62 updatedRefDetails62 updatedRuleParams63 updatedRefDetails63
+      patient7 = PatientReferralData3 updatedRuleParams71 updatedRefDetails71 updatedRuleParams72 updatedRefDetails72 updatedRuleParams73 updatedRefDetails73

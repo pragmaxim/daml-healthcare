@@ -1,0 +1,55 @@
+module Trigger.Main.AcceptClaimTrigger where
+
+import Model.Main.Claim
+import Daml.Script (Script, script)
+import Daml.Trigger
+import DA.Foldable hiding (length)
+import Daml.Trigger.Assert
+import DA.Assert
+import Model.Demo.Treatment
+import Model.Demo.ReferenceData
+import Trigger.Test.TriggerTestUtils
+
+acceptClaimTrigger : Trigger ()
+acceptClaimTrigger = Trigger
+  { initialize = pure ()
+  , updateState = \_ -> pure ()
+  , rule = acceptClaimRule
+  , registeredTemplates = RegisteredTemplates [
+      registeredTemplate @ClaimRequest
+    ]
+  , heartbeat = None
+  }
+
+acceptClaimRule : Party -> TriggerA () ()
+acceptClaimRule _party = do
+  claimRequests <- query @ClaimRequest
+  forA_ claimRequests $ \(claimRequestCid, _claimRequest) ->
+    dedupExercise claimRequestCid AcceptClaimRequest
+
+-- Tests ---------------------------
+
+testClaimIsAccepted: Script ()
+testClaimIsAccepted = script do
+  parties@Parties{payer1} <- allocateParties
+  treatmentScenario <- treatmentTest parties
+
+  let activeContracts =
+          toACS treatmentScenario.paymentReq11.claimReq
+  commands <-
+    testTrigger acceptClaimTrigger payer1 activeContracts
+
+  length commands === 1
+  assertExerciseCmd commands $ \(cid, choiceArg) -> do
+    assertEq cid treatmentScenario.paymentReq11.claimReq
+    assertEq choiceArg AcceptClaimRequest
+
+testNoClaim: Script ()
+testNoClaim = script do
+  Parties{payer1} <- allocateParties
+
+  let activeContracts = mempty
+  commands <-
+    testTrigger acceptClaimTrigger payer1 activeContracts
+
+  length commands === 0

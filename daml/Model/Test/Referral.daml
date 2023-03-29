@@ -1,0 +1,73 @@
+--
+-- Copyright (c) 2019, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+--
+
+
+module Model.Test.Referral where
+
+import Model.Main.Provider
+import Model.Test.Onboard
+import Model.Test.Patient
+import Model.Test.ReferenceData
+import Model.Main.RuleTypes
+import Model.Main.Policy
+import Daml.Script
+
+data ReferralScenarioOutput =
+  ReferralScenarioOutput with
+    provider2Role : ContractId Provider
+    referralReq : ContractId ReferralRequest
+    referralDetails : ContractId ReferralDetails
+    ruleParameters : RuleParameters
+    originalPolicy : ContractId InsurancePolicy
+
+-- standalone version to view it in DAML Studio
+referralTest' parties = referralTest =<< allocateParties
+
+referralTest parties@Parties{..} = script
+  do
+    patientScenario <- onboardPatient parties
+    let
+      _patient1Role = patientScenario.patient1Role
+      onboard = patientScenario.onboardResult
+      provider1Role = onboard.provider1Role
+      provider2Role = onboard.provider2Role
+      provider1NetworkContract = onboard.provider1NetworkContract
+      provider2NetworkContract = onboard.provider2NetworkContract
+      policyCid = patientScenario.disclosedPolicyCid
+      originalPolicy = patientScenario.originalPolicyCid
+      ruleParams =
+        RuleParameters with
+          policy = policyCid
+          encounterDetails = patient1Encounter
+          networkContract = provider2NetworkContract
+          referral = None
+
+
+    referralReq <- provider1 `submit` do
+      exerciseCmd provider1Role CreateReferral with
+        receiver = provider2
+        policy = ruleParams.policy
+        encounterId = ruleParams.encounterDetails.encounterId
+        procedureCode = ruleParams.encounterDetails.procedureCode
+        diagnosisCode = ruleParams.encounterDetails.diagnosisCode
+        siteServiceCode = ruleParams.encounterDetails.siteServiceCode
+        appointmentPriority = ruleParams.encounterDetails.appointmentPriority
+
+    referralOutput <- provider2 `submit` do
+      exerciseCmd referralReq EvaluateReferral with
+        networkContractCid = provider2NetworkContract
+
+    case referralOutput of
+      Right tuple -> do
+        referralDetails <- provider2 `submit` do
+          exerciseCmd (snd tuple) UpdateReferralDetails with
+            referralCid = fst tuple
+
+        let
+          ruleParameters = updateReferralParam ruleParams (fst tuple)
+
+
+        return ReferralScenarioOutput with ..
+      _ -> abort "FailedReferral"
