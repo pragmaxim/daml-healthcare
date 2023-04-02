@@ -1,5 +1,7 @@
 ## Reference Healthcare Daml Application
 
+[![IMAGE ALT TEXT](https://img.youtube.com/vi/DrwGxKIbneA/0.jpg)](https://youtu.be/DrwGxKIbneA)
+
 ### Overview
 
 This is meant to be a demonstration of general healthcare flow.
