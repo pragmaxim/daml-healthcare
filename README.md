@@ -1,6 +1,7 @@
 ## Reference Healthcare Daml Application
 
 [Watch](https://youtu.be/DrwGxKIbneA)
+
 [![IMAGE ALT TEXT](https://img.youtube.com/vi/DrwGxKIbneA/0.jpg)](https://youtu.be/DrwGxKIbneA)
 
 ### Overview
